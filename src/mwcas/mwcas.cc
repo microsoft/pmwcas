@@ -123,7 +123,9 @@ DescriptorPool::DescriptorPool(
               // (status is Undecided). In both cases we should roll back to old
               // value.
               *word.address_ = word.old_value_;
+#ifdef PMEM
               word.PersistAddress();
+#endif
               undo_words++;
               LOG(INFO) << "Applied old value 0x" << std::hex
                         << word.old_value_ << " at 0x" << word.address_;
@@ -141,7 +143,9 @@ DescriptorPool::DescriptorPool(
 
             if(val == (uint64_t)&desc) {
               *word.address_ = word.new_value_;
+#ifdef PMEM
               word.PersistAddress();
+#endif
               redo_words++;
               LOG(INFO) << "Applied new value 0x" << std::hex
                         << word.new_value_ << " at 0x" << word.address_;
@@ -312,6 +316,7 @@ inline int Descriptor::GetInsertPosition(uint64_t* addr) {
   return insertpos;
 }
 
+#ifdef PMEM
 inline uint32_t Descriptor::ReadPersistStatus() {
   auto curr_status = *& status_;
   uint32_t stable_status = curr_status & ~kStatusDirtyFlag;
@@ -325,6 +330,7 @@ inline uint32_t Descriptor::ReadPersistStatus() {
   }
   return stable_status;
 }
+#endif
 
 /// Installing mwcas descriptor must be a conditional CAS (double-compare
 /// single-swap, RDCSS): a thread can only CAS in a pointer to the mwcas
