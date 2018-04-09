@@ -16,6 +16,10 @@ DEFINE_uint64(array_size, 100, "size of the word array for mwcas benchmark");
 DEFINE_uint64(descriptor_pool_size, 262144, "number of total descriptors");
 DEFINE_string(shm_segment, "mwcas", "name of the shared memory segment for"
   " descriptors and data (for persistent MwCAS only)");
+DEFINE_bool(create_dax, false, "whether to create a shared segment on a DAX"
+  " volume");
+DEFINE_string(shm_filename, "", "if create_dax is specified, this string"
+  " specifies the filename on the DAX volume for mapping the segment");
 
 using namespace pmwcas;
 
@@ -40,12 +44,31 @@ int main(int argc, char* argv[]) {
   uint64_t size = sizeof(DescriptorPool::Metadata) +
                   sizeof(Descriptor) * FLAGS_descriptor_pool_size +  // descriptors area
                   sizeof(CasPtr) * FLAGS_array_size;  // data area
+
   SharedMemorySegment* segment = nullptr;
-  auto s = Environment::Get()->NewSharedMemorySegment(FLAGS_shm_segment, size,
+  Status s;
+  if (FLAGS_create_dax) {
+    if (0 == FLAGS_shm_filename.length()) {
+      LOG(ERROR) << "Filename for DAX volume is missing";
+      return -1;
+    }
+    s = Environment::Get()->NewDaxSharedMemorySegment(FLAGS_shm_segment,
+      FLAGS_shm_filename, size, &segment);
+  }
+  else {
+    s = Environment::Get()->NewSharedMemorySegment(FLAGS_shm_segment, size,
       false, &segment);
-  RAW_CHECK(s.ok() && segment, "Error creating memory segment");
+  }
+
+  if (!s.ok()) {
+    LOG(ERROR) << "Unable to create memory segment (" << s.ToString() << ")";
+    return -1;
+  }
+  RAW_CHECK(segment, "Error creating segment: segment memory is null");
+
   s = segment->Attach();
   RAW_CHECK(s.ok(), "cannot attach");
+
   memset(segment->GetMapAddress(), 0, size);
   segment->Detach();
 

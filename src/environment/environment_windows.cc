@@ -176,12 +176,26 @@ Status WindowsEnvironment::NewRandomReadWriteAsyncFile(
 Status WindowsEnvironment::NewSharedMemorySegment(const std::string& segname,
     uint64_t size, bool open_existing, SharedMemorySegment** seg) {
   *seg = nullptr;
+
   unique_ptr_t<SharedMemorySegment> alloc_guard;
   RETURN_NOT_OK(WindowsSharedMemorySegment::Create(alloc_guard));
-
   RETURN_NOT_OK(alloc_guard->Initialize(segname, size, open_existing));
 
   *seg = alloc_guard.release();
+
+  return Status::OK();
+}
+
+Status WindowsEnvironment::NewDaxSharedMemorySegment(const std::string& segname,
+    const std::string& filename, uint64_t size, SharedMemorySegment** seg) {
+  *seg = nullptr;
+
+  unique_ptr_t<SharedMemorySegment> alloc_guard;
+  RETURN_NOT_OK(WindowsSharedMemorySegment::Create(alloc_guard));
+  RETURN_NOT_OK(alloc_guard->CreateDax(segname, filename, size));
+
+  *seg = alloc_guard.release();
+
   return Status::OK();
 }
 
@@ -193,7 +207,6 @@ Status WindowsEnvironment::NewThreadPool(uint32_t max_threads,
 
   *pool = pool_guard.release();
   return Status::OK();
-
 }
 
 Status WindowsEnvironment::GetWorkingDirectory(std::string& directory) {
@@ -591,6 +604,7 @@ WindowsSharedMemorySegment::WindowsSharedMemorySegment()
   , segment_name_ { "" }
   , size_ { 0 }
   , map_handle_ { INVALID_HANDLE_VALUE }
+  , map_file_handle_ { INVALID_HANDLE_VALUE }
   , map_address_ { nullptr } {
 }
 
@@ -628,6 +642,57 @@ Status WindowsSharedMemorySegment::Initialize(const std::string& segname,
     return Status::IOError("Failed to create file mapping",
                            std::to_string(HRESULT_FROM_WIN32(error)));
   }
+  return Status::OK();
+}
+
+Status WindowsSharedMemorySegment::CreateDax(const std::string& segment_name,
+    const std::string& filename, uint64_t size) {
+  if (0 == segment_name.length() || 0 == filename.length()) {
+    return Status::InvalidArgument("Segment name of filename is null");
+  }
+
+  char volume_name[256] = { 0 };
+  BOOL success = GetVolumePathName(filename.c_str(), volume_name,
+      sizeof(volume_name));
+  if (!success) {
+    return Status::IOError("Unable to retrieve volume path information",
+      std::to_string(HRESULT_FROM_WIN32(::GetLastError())));
+  }
+
+  DWORD volume_flags = 0;
+  success = GetVolumeInformation(volume_name, NULL, 0, NULL, NULL,
+    &volume_flags, NULL, 0);
+  if (!success) {
+    return Status::IOError("Unable to retrieve volume information",
+      std::to_string(HRESULT_FROM_WIN32(::GetLastError())));
+  }
+
+  if (!(volume_flags & FILE_DAX_VOLUME)) {
+    return Status::IOError("Volume is not DAX");
+  }
+
+  DWORD desired_access = GENERIC_READ | GENERIC_WRITE;
+  DWORD const file_flags = FILE_FLAG_WRITE_THROUGH | FILE_FLAG_NO_BUFFERING;
+  DWORD create_disposition = CREATE_NEW;
+  DWORD shared_mode = 0;
+  LPSECURITY_ATTRIBUTES const security = NULL;
+
+  map_file_handle_ = CreateFile(filename.c_str(), desired_access, shared_mode,
+    security, create_disposition, file_flags, NULL);
+  if(INVALID_HANDLE_VALUE == map_file_handle_) {
+    return Status::IOError("Failed to create random read random write "
+      "file: " + filename, FormatWin32AndHRESULT(::GetLastError()));
+  }
+
+  segment_name_ = segment_name;
+  size_ = size;
+  map_handle_ = CreateFileMapping(INVALID_HANDLE_VALUE, nullptr,
+        PAGE_READWRITE, 0, size_, segment_name_.c_str());
+  if(INVALID_HANDLE_VALUE == map_handle_) {
+    return Status::IOError("Failed to create file mapping",
+      std::to_string(HRESULT_FROM_WIN32(::GetLastError())));
+  }
+
   return Status::OK();
 }
 

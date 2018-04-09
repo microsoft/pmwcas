@@ -329,23 +329,48 @@ class WindowsSharedMemorySegment : public SharedMemorySegment {
   WindowsSharedMemorySegment();
   ~WindowsSharedMemorySegment();
 
+  /// Allocate memory for a Windows shared memory segment and return it
+  /// attached to a unique_ptr
   static Status Create(unique_ptr_t<SharedMemorySegment>& segment);
 
+  /// Initialize or create a named shared memory segment. If open_existing
+  /// is true, attempts to open an existing segment, otherwise creates a new
+  /// segment. This method should be used for creating a new DRAM mapping or
+  /// attaching to a an existing mapping on a DAX volume. See CreateDax for
+  /// creating a new segment on a DAX volume.
   virtual Status Initialize(const std::string& segname, uint64_t size,
       bool open_existing) override;
 
+  /// Creates a new segment on a DAX volume. Will query volume information
+  /// (using filename) to check if the volume is indeed DAX. Existing DAX
+  /// segments should be opened using the Initialize function.
+  virtual Status CreateDax(const std::string& segname,
+    const std::string& filename, uint64_t size) override;
+
+  /// Attach to a segment that was opened using Initialize or CreateDax.
   virtual Status Attach(void* base_address = nullptr) override;
 
+  /// Detach from a segment.
   virtual Status Detach() override;
 
+  /// Retrieve the start address for the segment's address space.
   virtual void* GetMapAddress() override;
 
-  //virtual DumpToFile(const std::string& filename) override;
-
  private:
+  /// Name (identifier) of the shared memory segment.
   std::string segment_name_;
+
+  /// Size of the shared memory segment.
   uint64_t size_;
+
+  /// Handle to the mapped space.
   HANDLE map_handle_;
+
+  /// If mapped space is a DAX volume, stores the handle of the file on the
+  /// volume.
+  HANDLE map_file_handle_;
+
+  /// The start address of the mapped memory space.
   void* map_address_;
 };
 
@@ -384,6 +409,10 @@ class WindowsEnvironment : public IEnvironment {
 
   virtual Status NewSharedMemorySegment(const std::string& segname,
       uint64_t size, bool open_existing, SharedMemorySegment** seg) override;
+
+  virtual Status NewDaxSharedMemorySegment(const std::string& segname,
+      const std::string& filename, uint64_t size,
+      SharedMemorySegment** seg) override;
 
   virtual Status NewThreadPool(uint32_t max_threads,
       ThreadPool** pool) override;

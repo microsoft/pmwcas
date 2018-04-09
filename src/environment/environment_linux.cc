@@ -66,6 +66,11 @@ Status LinuxEnvironment::NewSharedMemorySegment(const std::string& segname,
   return Status::OK();
 }
 
+Status LinuxEnvironment::NewDaxSharedMemorySegment(const std::string& segname,
+    const std::string& filename, uint64_t size, SharedMemorySegment** seg) {
+  return Status::NotSupported("Not implemented");
+}
+
 Status LinuxEnvironment::NewThreadPool(uint32_t max_threads,
     ThreadPool** pool) {
   return Status::NotSupported("Not implemented");
@@ -218,6 +223,11 @@ Status LinuxSharedMemorySegment::Initialize(const std::string& segname,
                            std::string(strerror(errno)));
   }
   return Status::OK();
+}
+
+Status WindowsSharedMemorySegment::CreateDax(const std::string& segment_name,
+    const std::string& filename, uint64_t size) {
+  return Status::NotSupported("Not implemented");
 }
 
 Status LinuxSharedMemorySegment::Attach(void* base_address) {

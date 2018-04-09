@@ -30,15 +30,17 @@ class LinuxSharedMemorySegment : public SharedMemorySegment {
 
   static Status Create(unique_ptr_t<SharedMemorySegment>& segment);
 
-  virtual Status Initialize(const std::string& segname, uint64_t size, bool open_existing) override;
+  virtual Status Initialize(const std::string& segname, uint64_t size,
+      bool open_existing) override;
+
+  virtual Status CreateDax(const std::string& segname,
+      const std::string& filename, uint64_t size) override;
 
   virtual Status Attach(void* base_address = nullptr) override;
 
   virtual Status Detach() override;
 
   virtual void* GetMapAddress() override;
-
-  //virtual DumpToFile(const std::string& filename) override;
 
  private:
   std::string segment_name_;
@@ -80,6 +82,10 @@ class LinuxEnvironment : public IEnvironment {
 
   virtual Status NewSharedMemorySegment(const std::string& segname, uint64_t size,
                                         bool open_existing, SharedMemorySegment** seg) override;
+  
+  virtual Status NewDaxSharedMemorySegment(const std::string& segname,
+      const std::string& filename, uint64_t size,
+      SharedMemorySegment** seg) override;
 
   virtual Status NewThreadPool(uint32_t max_threads,
                                ThreadPool** pool) override;
