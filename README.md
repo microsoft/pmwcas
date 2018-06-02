@@ -14,12 +14,19 @@ ICDE 2018.
 
 The current code supports both Windows (CMake + Visual Studio) and Linux (CMake + gcc). 
 
+#### Huge pages and memlock limits (for Linux only)
+
 The Linux variant uses a simple thread-local allocator that uses huge pages. Make sure the system has enough huge pages:
 ```
 sudo sh -c 'echo [x pages] > /proc/sys/vm/nr_hugepages'
 ```
-
 By default the allocator needs ~10GB per socket, defined by `kNumaMemorySize` in [src/environment/environment_linux.h](./src/environment/environment_linux.h).
+
+On Linux `mwcas_shm_server` (see below) requires a proper value for memlock limits. Add the following to `/etc/security/limits.conf` (replace "[user]" with your login) to make it unlimited (need **re-login** to apply):
+```
+[user] soft memlock unlimited
+[user] hard memlock unlimited
+```
 
 ## Build
 Suppose we build in a separate directory "build" under the source directory.
