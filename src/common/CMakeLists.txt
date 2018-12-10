@@ -6,14 +6,13 @@ set(COMMON_HEADERS
 )
 
 set(COMMON_SOURCES
-  allocator_internal.cc
-  pmwcas_internal.cc
-  environment_internal.cc
-  epoch.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/allocator_internal.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/pmwcas_internal.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/environment_internal.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/epoch.cc
 )
 
-add_library(common STATIC ${COMMON_SOURCES} ${COMMON_HEADERS})
-target_link_libraries(common ${GFLAGS_LIB} ${GLOG_LIB})
+set_property(GLOBAL APPEND PROPERTY PMWCAS_SRC ${COMMON_SOURCES})
 
 set(COMMON_TEST_SOURCES
   allocator_internal_test.cc

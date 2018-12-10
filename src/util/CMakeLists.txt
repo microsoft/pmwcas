@@ -8,9 +8,8 @@ set(UTIL_HEADERS
 )
 
 set(UTIL_SOURCES
-  nvram.cc
-  status.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/nvram.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/status.cc
 )
 
-add_library(util STATIC ${UTIL_SOURCES} ${UTIL_HEADERS})
-target_link_libraries(util ${GFLAGS_LIB} ${GLOG_LIB})
+set_property(GLOBAL APPEND PROPERTY PMWCAS_SRC ${UTIL_SOURCES})

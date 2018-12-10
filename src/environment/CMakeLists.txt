@@ -1,8 +1,7 @@
 set(ENVIRONMENT_SOURCES
-  environment.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/environment.cc
 )
 
-add_library(environment STATIC ${ENVIRONMENT_SOURCES})
-target_link_libraries(environment ${GFLAGS_LIB} ${GLOG_LIB})
+set_property(GLOBAL APPEND PROPERTY PMWCAS_SRC ${ENVIRONMENT_SOURCES})
 
 ADD_PMWCAS_TEST(environment_tests)

@@ -4,10 +4,9 @@ set(MWCAS_HEADERS
 )
 
 set(MWCAS_SOURCES
-  mwcas.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/mwcas.cc
 )
 
-add_library(mwcas STATIC ${MWCAS_SOURCES} ${MWCAS_HEADERS})
-target_link_libraries(mwcas ${GFLAGS_LIB} ${GLOG_LIB})
+set_property(GLOBAL APPEND PROPERTY PMWCAS_SRC ${MWCAS_SOURCES})
 
 ADD_PMWCAS_TEST(mwcas_tests)
