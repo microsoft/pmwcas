@@ -94,7 +94,7 @@ struct DllStats {
   uint64_t n_effective_search;
   DllStats() : n_insert(0), n_delete(0), n_search(0), 
     n_effective_insert(0), n_effective_delete(0), n_effective_search(0) {}
-  friend DllStats& operator+(DllStats left, const DllStats& right) {
+  friend DllStats& operator+(DllStats &left, const DllStats& right) {
     left += right;
     return left;
   }
