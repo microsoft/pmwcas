@@ -96,6 +96,7 @@ struct DllStats {
     n_effective_insert(0), n_effective_delete(0), n_effective_search(0) {}
   friend DllStats& operator+(DllStats left, const DllStats& right) {
     left += right;
+    return left;
   }
   DllStats& operator+=(const DllStats& other) {
     n_insert += other.n_insert;
