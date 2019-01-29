@@ -5,6 +5,7 @@
 
 #include <numa.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 
 #include <cstdint>
 #include <atomic>
@@ -14,6 +15,8 @@
 
 #include <glog/logging.h>
 #include <glog/raw_logging.h>
+
+#include <libpmemobj.h>
 
 #include "include/environment.h"
 #include "include/allocator.h"
@@ -103,7 +106,7 @@ class LinuxEnvironment : public IEnvironment {
 class TlsAllocator : public IAllocator {
  public:
   static const uint64_t MB = 1024 * 1024;
-  static const uint64_t kNumaMemorySize = 10000 * MB;
+  static const uint64_t kNumaMemorySize = 1000 * MB;
   char** numa_memory_;
   uint64_t* numa_allocated_;
 
@@ -170,7 +173,7 @@ class TlsAllocator : public IAllocator {
     retry:
       if(memory && allocated + n <= kSlabSize) {
         uint64_t off = allocated;
-        allocated += n;
+        __atomic_fetch_add(&allocated, n, __ATOMIC_SEQ_CST);
         return (void*)((char*)memory + off);
       } else {
         // Slab full or not initialized yet
@@ -391,6 +394,107 @@ class DefaultAllocator : IAllocator {
     return 0;
   }
 
+};
+
+#define CREATE_MODE_RW (S_IWUSR | S_IRUSR)
+POBJ_LAYOUT_BEGIN(allocator);
+POBJ_LAYOUT_TOID(allocator, char);
+POBJ_LAYOUT_END(allocator);
+
+class PMDKAllocator : IAllocator {
+ public:
+  PMDKAllocator(PMEMobjpool *pop, const char *file_name): pop(pop), file_name(file_name) {}
+  ~PMDKAllocator() {}
+
+  // FIXME: make it configurable
+  static constexpr const char * pool_name="pmwcas_pmdk_pool";
+  static constexpr const char * layout_name="pmwcas_pmdk_layout";
+
+  static Status Create(IAllocator*& allocator) {
+    int n = posix_memalign(reinterpret_cast<void**>(&allocator), kCacheLineSize, sizeof(DefaultAllocator));
+    if(n || !allocator) return Status::Corruption("Out of memory");
+
+    PMEMobjpool *tmp_pool;
+    if(!FileExists(pool_name)) {
+     tmp_pool = pmemobj_create(pool_name, layout_name,
+         PMEMOBJ_MIN_POOL, CREATE_MODE_RW);
+     LOG_ASSERT(tmp_pool != nullptr);
+    } else {
+      tmp_pool = pmemobj_open(pool_name, layout_name);
+      LOG_ASSERT(tmp_pool != nullptr);
+    }
+
+    new(allocator) PMDKAllocator(tmp_pool, pool_name);
+    return Status::OK();
+  }
+
+  static bool FileExists(const char *pool_path) {
+    struct stat buffer;
+    return (stat(pool_path, &buffer) == 0);
+  }
+
+  static void Destory(IAllocator *a) {
+    PMDKAllocator * allocator= static_cast<PMDKAllocator*>(a);
+    allocator->~PMDKAllocator();
+    free(allocator);
+  }
+
+  void* Allocate(size_t nSize) {
+    TOID(char) memory;
+    POBJ_ALLOC(pop, &memory, char, sizeof(char) * nSize, NULL, NULL);
+    if(TOID_IS_NULL(memory)){
+      LOG(FATAL) << "POBJ_ALLOC error";
+    }
+    pmemobj_persist(pop, D_RW(memory), nSize * sizeof(*D_RW(memory)));
+    return pmemobj_direct(memory.oid);
+  }
+
+  void* CAlloc(size_t count, size_t size) {
+    /// TODO(tzwang): not implemented yet
+    return nullptr;
+  }
+
+  void Free(void* pBytes) {
+    free(pBytes);
+  }
+
+  void* AllocateAligned(size_t nSize, uint32_t nAlignment) {
+    RAW_CHECK(nAlignment == kCacheLineSize, "unsupported alignment.");
+    return Allocate(nSize);
+  }
+
+  void FreeAligned(void* pBytes) {
+    return Free(pBytes);
+  }
+
+  void* AllocateAlignedOffset(size_t size, size_t alignment, size_t offset) {
+    /// TODO(tzwang): not implemented yet
+    return nullptr;
+  }
+
+  void* AllocateHuge(size_t size) {
+    /// TODO(tzwang): not implemented yet
+    return nullptr;
+  }
+
+  Status Validate(void* pBytes) {
+    /// TODO(tzwang): not implemented yet
+    return Status::OK();
+  }
+
+  uint64_t GetAllocatedSize(void* pBytes) {
+    /// TODO(tzwang): not implemented yet
+    return 0;
+  }
+
+  int64_t GetTotalAllocationCount() {
+    /// TODO(tzwang): not implemented yet
+    return 0;
+  }
+
+ private:
+  PMEMobjpool *pop;
+  const char *file_name;
 };
 
 }
