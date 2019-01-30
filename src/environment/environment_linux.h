@@ -417,7 +417,7 @@ class PMDKAllocator : IAllocator {
     PMEMobjpool *tmp_pool;
     if(!FileExists(pool_name)) {
      tmp_pool = pmemobj_create(pool_name, layout_name,
-         PMEMOBJ_MIN_POOL, CREATE_MODE_RW);
+                               (1024*1024*1024) , CREATE_MODE_RW);
      LOG_ASSERT(tmp_pool != nullptr);
     } else {
       tmp_pool = pmemobj_open(pool_name, layout_name);
@@ -439,14 +439,12 @@ class PMDKAllocator : IAllocator {
     free(allocator);
   }
 
-  void* Allocate(size_t nSize) {
-    TOID(char) memory;
-    POBJ_ALLOC(pop, &memory, char, sizeof(char) * nSize, NULL, NULL);
-    if(TOID_IS_NULL(memory)){
+  void* Allocate(size_t nSize) override {
+    PMEMoid ptr;
+    if(pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char))){
       LOG(FATAL) << "POBJ_ALLOC error";
     }
-    pmemobj_persist(pop, D_RW(memory), nSize * sizeof(*D_RW(memory)));
-    return pmemobj_direct(memory.oid);
+    return pmemobj_direct(ptr);
   }
 
   void* CAlloc(size_t count, size_t size) {
