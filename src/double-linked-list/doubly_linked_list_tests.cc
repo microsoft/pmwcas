@@ -482,8 +482,8 @@ int main(int argc, char** argv) {
                            pmwcas::WindowsEnvironment::Create,
                            pmwcas::WindowsEnvironment::Destroy);
 #else
-  pmwcas::InitLibrary(pmwcas::TlsAllocator::Create,
-                           pmwcas::TlsAllocator::Destroy,
+  pmwcas::InitLibrary(pmwcas::PMDKAllocator::Create,
+                           pmwcas::PMDKAllocator::Destroy,
                            pmwcas::LinuxEnvironment::Create,
                            pmwcas::LinuxEnvironment::Destroy);
 #endif

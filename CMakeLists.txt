@@ -226,6 +226,12 @@ set(GTEST_LIB GTest)
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
+set(PMDK_SRC_PATH "" CACHE STRING "PMDK source path")
+include_directories(${PMDK_SRC_PATH}/src/include)
+set(PMDK_LIB_PATH "" CACHE STRING "PMDK shared library path")
+link_directories(${PMDK_LIB_PATH})
+link_libraries("-lpmemobj")
+
 # Set the directory targets when build in libs and binaries
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -313,8 +319,4 @@ endif()
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
 
-set(PMDK_SRC_PATH "" CACHE STRING "PMDK source path")
-include_directories(${PMDK_SRC_PATH}/src/include)
-set(PMDK_LIB_PATH "" CACHE STRING "PMDK shared library path")
-link_directories(${PMDK_LIB_PATH})
-link_libraries("-lpmemobj")
+

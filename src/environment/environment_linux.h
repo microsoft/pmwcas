@@ -433,8 +433,8 @@ class PMDKAllocator : IAllocator {
     return (stat(pool_path, &buffer) == 0);
   }
 
-  static void Destory(IAllocator *a) {
-    PMDKAllocator * allocator= static_cast<PMDKAllocator*>(a);
+  static void Destroy(IAllocator *a) {
+    auto* allocator= static_cast<PMDKAllocator*>(a);
     allocator->~PMDKAllocator();
     free(allocator);
   }
@@ -455,7 +455,10 @@ class PMDKAllocator : IAllocator {
   }
 
   void Free(void* pBytes) {
-    free(pBytes);
+    auto oid_ptr = pmemobj_oid(pBytes);
+    TOID(char) ptr_cpy;
+    TOID_ASSIGN(ptr_cpy, oid_ptr);
+    POBJ_FREE(&ptr_cpy);
   }
 
   void* AllocateAligned(size_t nSize, uint32_t nAlignment) {
@@ -468,27 +471,22 @@ class PMDKAllocator : IAllocator {
   }
 
   void* AllocateAlignedOffset(size_t size, size_t alignment, size_t offset) {
-    /// TODO(tzwang): not implemented yet
     return nullptr;
   }
 
   void* AllocateHuge(size_t size) {
-    /// TODO(tzwang): not implemented yet
     return nullptr;
   }
 
   Status Validate(void* pBytes) {
-    /// TODO(tzwang): not implemented yet
     return Status::OK();
   }
 
   uint64_t GetAllocatedSize(void* pBytes) {
-    /// TODO(tzwang): not implemented yet
     return 0;
   }
 
   int64_t GetTotalAllocationCount() {
-    /// TODO(tzwang): not implemented yet
     return 0;
   }
 
