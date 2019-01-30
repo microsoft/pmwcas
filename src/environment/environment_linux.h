@@ -447,24 +447,35 @@ class PMDKAllocator : IAllocator {
     return pmemobj_direct(ptr);
   }
 
+  void* GetRoot(size_t nSize) {
+    return pmemobj_direct(pmemobj_root(pop, nSize));
+  }
+
+  PMEMobjpool *GetPool(){
+    return pop;
+  }
+
+  void PersistPtr(void *ptr, uint64_t size){
+    pmemobj_persist(pop, ptr, size);
+  }
+
   void* CAlloc(size_t count, size_t size) {
-    /// TODO(tzwang): not implemented yet
     return nullptr;
   }
 
-  void Free(void* pBytes) {
+  void Free(void* pBytes) override {
     auto oid_ptr = pmemobj_oid(pBytes);
     TOID(char) ptr_cpy;
     TOID_ASSIGN(ptr_cpy, oid_ptr);
     POBJ_FREE(&ptr_cpy);
   }
 
-  void* AllocateAligned(size_t nSize, uint32_t nAlignment) {
+  void* AllocateAligned(size_t nSize, uint32_t nAlignment) override {
     RAW_CHECK(nAlignment == kCacheLineSize, "unsupported alignment.");
     return Allocate(nSize);
   }
 
-  void FreeAligned(void* pBytes) {
+  void FreeAligned(void* pBytes) override {
     return Free(pBytes);
   }
 
