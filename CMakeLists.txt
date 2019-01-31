@@ -233,10 +233,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Set the list of libraries that make up the pmwcas stack
 set (PMWCAS_LINK_LIBS
-  environment
-  util
-  common
-  mwcas
+  pmwcas
 )
 
 # Set the list of libraries that use pmwcas
@@ -305,3 +302,13 @@ add_subdirectory(src/common)
 add_subdirectory(src/benchmarks)
 add_subdirectory(src/mwcas)
 add_subdirectory(src/double-linked-list)
+
+# Generate a shared library for applications to link
+if(WIN32)
+  set_property(GLOBAL APPEND PROPERTY PMWCAS_SRC ${WINDOWS_ENVIRONMENT_SOURCES})
+else()
+  set_property(GLOBAL APPEND PROPERTY PMWCAS_SRC ${LINUX_ENVIRONMENT_SOURCES})
+endif()
+
+get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
+add_library(pmwcas SHARED ${PMWCAS_SRC})
