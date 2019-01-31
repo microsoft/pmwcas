@@ -32,7 +32,10 @@ EpochManager::~EpochManager() {
 Status EpochManager::Initialize() {
   if(epoch_table_) return Status::OK();
 
-  MinEpochTable* new_table = new MinEpochTable();
+  auto new_table = reinterpret_cast<MinEpochTable*>
+                    (Allocator::Get()->Allocate(sizeof(MinEpochTable)));
+  new(new_table) MinEpochTable();
+
   if(new_table == nullptr) return Status::Corruption("Out of memory");
   RETURN_NOT_OK(new_table->Initialize());
 
@@ -150,11 +153,14 @@ Status EpochManager::MinEpochTable::Initialize(uint64_t size) {
   if(!IS_POWER_OF_TWO(size)) return Status::InvalidArgument(
                                         "size not a power of two");
 
-  Entry* new_table= new Entry[size];
+  auto new_table = reinterpret_cast<Entry*>(
+      Allocator::Get()->Allocate(sizeof(Entry) * size));
+//  auto new_table = new Entry[size];
   if(!new_table) return Status::Corruption("Out of memory");
 
   // Ensure the table is cacheline size aligned.
-  assert(!(reinterpret_cast<uintptr_t>(new_table)& (CACHELINE_SIZE - 1)));
+  // FIXME(hao): loosen the requirement here
+//  assert(!(reinterpret_cast<uintptr_t>(new_table)& (CACHELINE_SIZE - 1)));
 
   table_ = new_table;
   size_ = size;

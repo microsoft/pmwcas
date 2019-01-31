@@ -173,7 +173,7 @@ class TlsAllocator : public IAllocator {
     retry:
       if(memory && allocated + n <= kSlabSize) {
         uint64_t off = allocated;
-        __atomic_fetch_add(&allocated, n, __ATOMIC_SEQ_CST);
+        allocated += n;
         return (void*)((char*)memory + off);
       } else {
         // Slab full or not initialized yet
@@ -404,7 +404,9 @@ POBJ_LAYOUT_END(allocator);
 class PMDKAllocator : IAllocator {
  public:
   PMDKAllocator(PMEMobjpool *pop, const char *file_name): pop(pop), file_name(file_name) {}
-  ~PMDKAllocator() {}
+  ~PMDKAllocator() {
+    pmemobj_close(pop);
+  }
 
   // FIXME: make it configurable
   static constexpr const char * pool_name="pmwcas_pmdk_pool";
