@@ -449,6 +449,15 @@ class PMDKAllocator : IAllocator {
     return pmemobj_direct(ptr);
   }
 
+  void* AllocateOff(size_t nSize){
+    PMEMoid ptr;
+    if(pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char))){
+      LOG(FATAL) << "POBJ_ALLOC error";
+    }
+    return reinterpret_cast<void*>(ptr.off);
+  }
+
+
   void* GetRoot(size_t nSize) {
     return pmemobj_direct(pmemobj_root(pop, nSize));
   }

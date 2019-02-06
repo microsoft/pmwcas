@@ -68,8 +68,7 @@ DescriptorPool::DescriptorPool(
     partition_count_ *= 2;
   }
 
-  partition_table_ = (DescriptorPartition*)Allocator::Get()->AllocateAligned(
-    sizeof(DescriptorPartition)*partition_count_, kCacheLineSize);
+  partition_table_ = (DescriptorPartition*)malloc(sizeof(DescriptorPartition)*partition_count_);
   RAW_CHECK(nullptr != partition_table_, "out of memory");
 
   for(uint32_t i = 0; i < partition_count_; ++i) {
