@@ -7,6 +7,7 @@
 #include <intrin.h>
 #endif
 
+#include <libpmemobj.h>
 #include "glog/logging.h"
 #include "glog/raw_logging.h"
 #include "include/environment.h"
@@ -83,6 +84,8 @@ struct NVRAM {
       }
 #endif
     }
+    auto pmdk_allocator = reinterpret_cast<PMDKAllocator*>(Allocator::Get());
+    pmdk_allocator->PersistPtr(data, bytes);
   }
 #endif
 };
