@@ -223,6 +223,9 @@ public:
   /// Abort the MwCAS operation, can be used only before the operation starts.
   Status Abort();
 
+  // Abort the operation mark it as succeeded.
+  Status Finish();
+
 private:
   /// Allow tests to access privates for failure injection purposes.
   FRIEND_TEST(PMwCASTest, SingleThreadedRecovery);
@@ -379,6 +382,7 @@ private:
   /// Count of actual descriptors held in #WordDesc
   uint32_t count_;
 
+
   /// A callback for freeing the words listed in [words_] when recycling the
   /// descriptor. Optional: only for applications that use it.
   FreeCallback free_callback_;
@@ -435,6 +439,9 @@ private:
   /// Epoch manager controling garbage/access to descriptors.
   EpochManager epoch_;
 
+  /// Track the pmdk pool for recovery purpose
+  uint64_t pmdk_pool_;
+
  public:
   /// Metadata that prefixes the actual pool of descriptors for persistence
   struct Metadata {
@@ -454,6 +461,11 @@ private:
     uint32_t partition_count,
     Descriptor* desc_va,
     bool enable_stats = false);
+
+  Descriptor* GetDescriptor(){
+    return descriptors_;
+  }
+
 
   ~DescriptorPool();
 

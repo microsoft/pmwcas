@@ -20,8 +20,7 @@ DescriptorPartition::DescriptorPartition(EpochManager* epoch,
     DescriptorPool* pool)
     : desc_pool(pool) {
   free_list = nullptr;
-  garbage_list = (GarbageListUnsafe*)Allocator::Get()->Allocate(
-        sizeof(GarbageListUnsafe));
+  garbage_list = (GarbageListUnsafe*)malloc(sizeof(GarbageListUnsafe));
   new(garbage_list) GarbageListUnsafe;
   auto s = garbage_list->Initialize(epoch);
   RAW_CHECK(s.ok(), "garbage list initialization failure");
@@ -80,11 +79,17 @@ DescriptorPool::DescriptorPool(
   RAW_CHECK(pool_size_ > 0, "invalid pool size");
 
   if(descriptors_) {
-    Metadata *metadata = (Metadata*)((uint64_t)descriptors_ - sizeof(Metadata));
-    RAW_CHECK((uint64_t)metadata->initial_address == (uint64_t)metadata,
-              "invalid initial address");
-    RAW_CHECK(metadata->descriptor_count == pool_size_,
-              "wrong descriptor pool size");
+//    Metadata *metadata = (Metadata*)((uint64_t)descriptors_ - sizeof(Metadata));
+//    RAW_CHECK((uint64_t)metadata->initial_address == (uint64_t)metadata,
+//              "invalid initial address");
+//    RAW_CHECK(metadata->descriptor_count == pool_size_,
+//              "wrong descriptor pool size");
+
+#ifdef PMEM
+    auto new_pmdk_pool = reinterpret_cast<PMDKAllocator*>(Allocator::Get())->GetPool();
+    uint64_t adjust_offset = (uint64_t)new_pmdk_pool - pmdk_pool_;
+    descriptors_ = reinterpret_cast<Descriptor *>((uint64_t)descriptors_ + adjust_offset);
+#endif
 
     // If it is an existing pool, see if it has anything in it
     uint64_t in_progress_desc = 0, redo_words = 0, undo_words = 0;
@@ -102,6 +107,13 @@ DescriptorPool::DescriptorPool(
         }
 
         desc.assert_valid_status();
+#ifdef PMEM
+        // lets set the real address first
+        for(int w = 0; w < desc.count_; ++w) {
+          auto &word = desc.words_[w];
+          word.address_ = (uint64_t *)((uint64_t)word.address_ + adjust_offset);
+        }
+#endif
 
         // Otherwise do recovery 
         uint32_t status = desc.status_ & ~Descriptor::kStatusDirtyFlag;
@@ -174,6 +186,11 @@ DescriptorPool::DescriptorPool(
         sizeof(Descriptor) * pool_size_, kCacheLineSize);
     RAW_CHECK(descriptors_, "out of memory");
   }
+
+#ifdef PMEM
+  // set the new pmdk_pool addr
+  pmdk_pool_ = (uint64_t) reinterpret_cast<PMDKAllocator*>(Allocator::Get())->GetPool();
+#endif
 
   // (Re-)initialize descriptors. Any recovery business should be done by now,
   // start as a clean slate.
@@ -805,6 +822,14 @@ bool Descriptor::Cleanup() {
 Status Descriptor::Abort() {
   RAW_CHECK(status_ == kStatusFinished, "cannot abort under current status");
   status_ = kStatusFailed;
+  auto s = owner_partition_->garbage_list->Push(this,
+      Descriptor::FreeDescriptor, nullptr);
+  RAW_CHECK(s.ok(), "garbage list push() failed");
+  return s;
+}
+
+Status Descriptor::Finish() {
+  RAW_CHECK(status_ == kStatusFinished, "cannot abort under current status");
   auto s = owner_partition_->garbage_list->Push(this,
       Descriptor::FreeDescriptor, nullptr);
   RAW_CHECK(s.ok(), "garbage list push() failed");

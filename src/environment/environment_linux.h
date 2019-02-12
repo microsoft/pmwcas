@@ -409,8 +409,8 @@ class PMDKAllocator : IAllocator {
   }
 
   // FIXME: make it configurable
-  static constexpr const char * pool_name="pmwcas_pmdk_pool";
-  static constexpr const char * layout_name="pmwcas_pmdk_layout";
+  static constexpr const char * pool_name = "pmwcas_pmdk_pool";
+  static constexpr const char * layout_name = "pmwcas_pmdk_layout";
 
   static Status Create(IAllocator*& allocator) {
     int n = posix_memalign(reinterpret_cast<void**>(&allocator), kCacheLineSize, sizeof(DefaultAllocator));
@@ -447,6 +447,18 @@ class PMDKAllocator : IAllocator {
       LOG(FATAL) << "POBJ_ALLOC error";
     }
     return pmemobj_direct(ptr);
+  }
+
+  template<typename T>
+  inline T *GetDirect(T *pmem_offset) {
+    return reinterpret_cast<T *>(
+        reinterpret_cast<uint64_t>(pmem_offset) + reinterpret_cast<char *>(GetPool()));
+  }
+
+  template<typename T>
+  inline T *GetOffset(T *pmem_direct) {
+    return reinterpret_cast<T *>(
+        reinterpret_cast<char *>(pmem_direct) - reinterpret_cast<char *>(GetPool()));
   }
 
   void AllocateDirect(void** mem, size_t nSize) {
