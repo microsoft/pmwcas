@@ -125,7 +125,9 @@ DescriptorPool::DescriptorPool(
           for(int w = 0; w < desc.count_; ++w) {
             auto& word = desc.words_[w];
             uint64_t val = Descriptor::CleanPtr(*word.address_);
-
+#ifdef PMEM
+            val += adjust_offset;
+#endif
             if(val == (uint64_t)&desc || val == (uint64_t)&word) {
               // If it's a CondCAS descriptor, then MwCAS descriptor wasn't
               // installed/persisted, i.e., new value (succeeded) or old value
@@ -150,6 +152,9 @@ DescriptorPool::DescriptorPool(
             auto& word = desc.words_[w];
 
             uint64_t val = Descriptor::CleanPtr(*word.address_);
+#ifdef PMEM
+            val += adjust_offset;
+#endif
             RAW_CHECK(val != (uint64_t)&word, "invalid field value");
 
             if(val == (uint64_t)&desc) {
