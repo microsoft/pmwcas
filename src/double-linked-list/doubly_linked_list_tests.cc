@@ -482,11 +482,18 @@ int main(int argc, char** argv) {
                            pmwcas::WindowsEnvironment::Create,
                            pmwcas::WindowsEnvironment::Destroy);
 #else
+#ifdef PMEM
   pmwcas::InitLibrary(pmwcas::PMDKAllocator::Create,
                            pmwcas::PMDKAllocator::Destroy,
                            pmwcas::LinuxEnvironment::Create,
                            pmwcas::LinuxEnvironment::Destroy);
-#endif
+#else
+  pmwcas::InitLibrary(pmwcas::TlsAllocator::Create,
+                           pmwcas::TlsAllocator::Destroy,
+                           pmwcas::LinuxEnvironment::Create,
+                           pmwcas::LinuxEnvironment::Destroy);
+#endif  // PMEM
+#endif  // WIN32
 
   return RUN_ALL_TESTS();
 }

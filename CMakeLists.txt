@@ -35,6 +35,7 @@ add_definitions()
 
 # Set PMEM by default to build persistent version
 option(WITH_PMEM "Support persistence" ON)
+message(STATUS "Persistence support using PMDK: ${WITH_PMEM}")
 if(WITH_PMEM)
   add_definitions(-DPMEM)
 endif()
@@ -226,11 +227,31 @@ set(GTEST_LIB GTest)
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
-set(PMDK_SRC_PATH "" CACHE STRING "PMDK source path")
-include_directories(${PMDK_SRC_PATH}/src/include)
-set(PMDK_LIB_PATH "" CACHE STRING "PMDK shared library path")
-link_directories(${PMDK_LIB_PATH}/src/nondebug)
-link_libraries("-lpmemobj")
+##################### PMDK ####################
+if(WITH_PMEM)
+  set(PMDK_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/pmdk")
+  ExternalProject_Add(PMDK
+    GIT_REPOSITORY https://github.com/pmem/pmdk.git
+    GIT_TAG stable-1.5
+    BUILD_IN_SOURCE 1
+    BUILD_COMMAND $(MAKE)
+    PREFIX ${PMDK_PREFIX}
+    CONFIGURE_COMMAND ""
+    INSTALL_COMMAND ""
+    LOG_DOWNLOAD ON
+    LOG_CONFIGURE ON
+    LOG_BUILD ON
+  )
+
+  include_directories(${PMDK_PREFIX}/src/PMDK/src/include)
+  if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    link_directories(${PMDK_PREFIX}/src/PMDK/src/debug)
+  else()
+    link_directories(${PMDK_PREFIX}/src/PMDK/src/nondebug)
+  endif()
+  link_libraries("-lpmemobj")
+endif()
+##############################################
 
 # Set the directory targets when build in libs and binaries
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -288,6 +309,9 @@ FUNCTION(ADD_PMWCAS_TEST TEST_NAME)
   target_link_libraries(${TEST_NAME} ${PMWCAS_TEST_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
   target_include_directories(${TEST_NAME} PUBLIC ${gtest_SOURCE_DIR} ${gtest_SOURCE_DIR}/include) 
   add_test(${TEST_NAME} ${CMAKE_BINARY_DIR}/${TEST_NAME})
+  if(WITH_PMEM)
+    add_dependencies(${TEST_NAME} PMDK)
+  endif()
 ENDFUNCTION()
 
 #Function to automate building benchmark binaries with appropriate environment sources
@@ -298,6 +322,9 @@ FUNCTION(ADD_PMWCAS_BENCHMARK BENCHMARK_NAME)
     add_executable(${BENCHMARK_NAME} ${BENCHMARK_HEADERS} ${BENCHMARK_NAME}.cc ${CMAKE_SOURCE_DIR}/${LINUX_ENVIRONMENT_SOURCES})
   endif()
 
+  if(WITH_PMEM)
+    add_dependencies(${BENCHMARK_NAME} PMDK)
+  endif()
   target_link_libraries(${BENCHMARK_NAME} ${PMWCAS_BENCHMARK_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
 ENDFUNCTION()
 
@@ -318,5 +345,7 @@ endif()
 
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
-
-
+if(WITH_PMEM)
+  add_dependencies(pmwcas PMDK)
+  add_dependencies(double-linked-list PMDK)
+endif()

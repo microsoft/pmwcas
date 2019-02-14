@@ -7,7 +7,10 @@
 #include <intrin.h>
 #endif
 
+#ifdef PMEM
 #include <libpmemobj.h>
+#endif
+
 #include "glog/logging.h"
 #include "glog/raw_logging.h"
 #include "include/environment.h"
