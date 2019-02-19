@@ -33,17 +33,41 @@ set_directory_properties(PROPERTIES COMPILE_DEFINITIONS_DEBUG "_DEBUG")
 
 add_definitions()
 
-# Set PMEM by default to build persistent version
-option(WITH_PMEM "Support persistence" ON)
-message(STATUS "Persistence support using PMDK: ${WITH_PMEM}")
-if(WITH_PMEM)
+# Set backend to PMDK by default to build persistent version
+set(PMEM_BACKEND "PMDK" CACHE STRING "Persistent memory backend type")
+string(TOUPPER ${PMEM_BACKEND} PMEM_BACKEND)
+
+# Both volatile and persistent versions are supported, by setting PMEM_BACKEND to:
+# PMDK    : use PMDK for persistence
+# EMU     : use simple shared memory for emulating persistent memory. This
+#           should only be used for experimental and profiling purpose. No real
+#           persistence is guaranteed.
+# VOLATILE: turn off persistence and build a volatile version, no persistence
+#           whatsoever. Equivalent to the original MwCAS operation.
+#
+# If persistent memory support is turned on, in the code we define both PMEM and
+# the corresponding macro for the backend. Code that is agnostic to the backend
+# is wrapped by PMEM; code that is specific to the backend is wrapped around by
+# PMEMEMU (for using emulation) or PMDK (for using PMDK).
+if(${PMEM_BACKEND} STREQUAL "PMDK")
   add_definitions(-DPMEM)
+  add_definitions(-DPMDK)
+  message(STATUS "Persistence support: PMDK")
+elseif(${PMEM_BACKEND} STREQUAL "EMU")
+  add_definitions(-DPMEM)
+  add_definitions(-DPMEMEMU)
+  message(STATUS "Persistence support: emulation")
+elseif(${PMEM_BACKEND} STREQUAL "VOLATILE")
+  message(STATUS "Persistence support: off")
+else()
+  message(FATAL_ERROR "Unsupported persistent memory backend: ${PMEM_BACKEND}")
 endif()
 
-# Turn off RTM by default
+# Turn off RTM by default - only allowed when persistence is turned off (i.e.,
+# PMEM_BACKEND == VOLATILE
 option(WITH_RTM "Use RTM for installing descriptors" OFF)
 if(WITH_RTM)
-  if(WITH_PMEM)
+  if(NOT (${PMEM_BACKEND} STREQUAL "VOLATILE"))
     message(FATAL_ERROR "Cannot use RTM with persistence.")
   endif()
   add_definitions(-DRTM)
@@ -228,7 +252,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 ##################### PMDK ####################
-if(WITH_PMEM)
+if(${PMEM_BACKEND} STREQUAL "PMDK")
   set(PMDK_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/pmdk")
   ExternalProject_Add(PMDK
     GIT_REPOSITORY https://github.com/pmem/pmdk.git
@@ -309,7 +333,7 @@ FUNCTION(ADD_PMWCAS_TEST TEST_NAME)
   target_link_libraries(${TEST_NAME} ${PMWCAS_TEST_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
   target_include_directories(${TEST_NAME} PUBLIC ${gtest_SOURCE_DIR} ${gtest_SOURCE_DIR}/include) 
   add_test(${TEST_NAME} ${CMAKE_BINARY_DIR}/${TEST_NAME})
-  if(WITH_PMEM)
+  if(${PMEM_BACKEND} STREQUAL "PMDK")
     add_dependencies(${TEST_NAME} PMDK)
   endif()
 ENDFUNCTION()
@@ -322,7 +346,7 @@ FUNCTION(ADD_PMWCAS_BENCHMARK BENCHMARK_NAME)
     add_executable(${BENCHMARK_NAME} ${BENCHMARK_HEADERS} ${BENCHMARK_NAME}.cc ${CMAKE_SOURCE_DIR}/${LINUX_ENVIRONMENT_SOURCES})
   endif()
 
-  if(WITH_PMEM)
+  if(${PMEM_BACKEND} STREQUAL "PMDK")
     add_dependencies(${BENCHMARK_NAME} PMDK)
   endif()
   target_link_libraries(${BENCHMARK_NAME} ${PMWCAS_BENCHMARK_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
@@ -345,7 +369,7 @@ endif()
 
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
-if(WITH_PMEM)
+if(${PMEM_BACKEND} STREQUAL "PMDK")
   add_dependencies(pmwcas PMDK)
   add_dependencies(double-linked-list PMDK)
 endif()

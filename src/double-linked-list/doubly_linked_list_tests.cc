@@ -482,7 +482,7 @@ int main(int argc, char** argv) {
                            pmwcas::WindowsEnvironment::Create,
                            pmwcas::WindowsEnvironment::Destroy);
 #else
-#ifdef PMEM
+#ifdef PMDK
   pmwcas::InitLibrary(pmwcas::PMDKAllocator::Create,
                            pmwcas::PMDKAllocator::Destroy,
                            pmwcas::LinuxEnvironment::Create,
@@ -492,7 +492,7 @@ int main(int argc, char** argv) {
                            pmwcas::TlsAllocator::Destroy,
                            pmwcas::LinuxEnvironment::Create,
                            pmwcas::LinuxEnvironment::Destroy);
-#endif  // PMEM
+#endif  // PMDK
 #endif  // WIN32
 
   return RUN_ALL_TESTS();

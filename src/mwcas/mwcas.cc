@@ -79,17 +79,17 @@ DescriptorPool::DescriptorPool(
   RAW_CHECK(pool_size_ > 0, "invalid pool size");
 
   if(descriptors_) {
-//    Metadata *metadata = (Metadata*)((uint64_t)descriptors_ - sizeof(Metadata));
-//    RAW_CHECK((uint64_t)metadata->initial_address == (uint64_t)metadata,
-//              "invalid initial address");
-//    RAW_CHECK(metadata->descriptor_count == pool_size_,
-//              "wrong descriptor pool size");
-
-#ifdef PMEM
+#ifdef PMDK
     auto new_pmdk_pool = reinterpret_cast<PMDKAllocator*>(Allocator::Get())->GetPool();
     uint64_t adjust_offset = (uint64_t)new_pmdk_pool - pmdk_pool_;
     descriptors_ = reinterpret_cast<Descriptor *>((uint64_t)descriptors_ + adjust_offset);
-#endif
+#else
+    Metadata *metadata = (Metadata*)((uint64_t)descriptors_ - sizeof(Metadata));
+    RAW_CHECK((uint64_t)metadata->initial_address == (uint64_t)metadata,
+              "invalid initial address");
+    RAW_CHECK(metadata->descriptor_count == pool_size_,
+              "wrong descriptor pool size");
+#endif  // PMDK
 
     // If it is an existing pool, see if it has anything in it
     uint64_t in_progress_desc = 0, redo_words = 0, undo_words = 0;
@@ -107,8 +107,8 @@ DescriptorPool::DescriptorPool(
         }
 
         desc.assert_valid_status();
-#ifdef PMEM
-        // lets set the real address first
+#ifdef PMDK
+        // Let's set the real addresses first
         for(int w = 0; w < desc.count_; ++w) {
           auto &word = desc.words_[w];
           word.address_ = (uint64_t *)((uint64_t)word.address_ + adjust_offset);
@@ -125,7 +125,7 @@ DescriptorPool::DescriptorPool(
           for(int w = 0; w < desc.count_; ++w) {
             auto& word = desc.words_[w];
             uint64_t val = Descriptor::CleanPtr(*word.address_);
-#ifdef PMEM
+#ifdef PMDK
             val += adjust_offset;
 #endif
             if(val == (uint64_t)&desc || val == (uint64_t)&word) {
@@ -152,7 +152,7 @@ DescriptorPool::DescriptorPool(
             auto& word = desc.words_[w];
 
             uint64_t val = Descriptor::CleanPtr(*word.address_);
-#ifdef PMEM
+#ifdef PMDK
             val += adjust_offset;
 #endif
             RAW_CHECK(val != (uint64_t)&word, "invalid field value");
@@ -192,8 +192,8 @@ DescriptorPool::DescriptorPool(
     RAW_CHECK(descriptors_, "out of memory");
   }
 
-#ifdef PMEM
-  // set the new pmdk_pool addr
+#ifdef PMDK
+  // Set the new pmdk_pool addr
   pmdk_pool_ = (uint64_t) reinterpret_cast<PMDKAllocator*>(Allocator::Get())->GetPool();
 #endif
 

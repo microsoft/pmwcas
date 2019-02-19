@@ -16,7 +16,7 @@
 #include <glog/logging.h>
 #include <glog/raw_logging.h>
 
-#ifdef PMEM
+#ifdef PMDK
 #include <libpmemobj.h>
 #endif
 
@@ -108,7 +108,7 @@ class LinuxEnvironment : public IEnvironment {
 class TlsAllocator : public IAllocator {
  public:
   static const uint64_t MB = 1024 * 1024;
-  static const uint64_t kNumaMemorySize = 1000 * MB;
+  static const uint64_t kNumaMemorySize = 4096 * MB;
   char** numa_memory_;
   uint64_t* numa_allocated_;
 
@@ -398,7 +398,7 @@ class DefaultAllocator : IAllocator {
 
 };
 
-#ifdef PMEM
+#ifdef PMDK
 
 #define CREATE_MODE_RW (S_IWUSR | S_IRUSR)
 POBJ_LAYOUT_BEGIN(allocator);
@@ -542,6 +542,6 @@ class PMDKAllocator : IAllocator {
   PMEMobjpool *pop;
   const char *file_name;
 };
-#endif  // PMEM
+#endif  // PMDK
 
 }
