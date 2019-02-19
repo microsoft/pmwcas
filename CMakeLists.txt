@@ -35,6 +35,7 @@ add_definitions()
 
 # Set backend to PMDK by default to build persistent version
 set(PMEM_BACKEND "PMDK" CACHE STRING "Persistent memory backend type")
+string(TOUPPER ${PMEM_BACKEND} PMEM_BACKEND)
 
 # Both volatile and persistent versions are supported, by setting PMEM_BACKEND to:
 # PMDK    : use PMDK for persistence
