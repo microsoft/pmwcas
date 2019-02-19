@@ -405,6 +405,7 @@ POBJ_LAYOUT_BEGIN(allocator);
 POBJ_LAYOUT_TOID(allocator, char);
 POBJ_LAYOUT_END(allocator);
 
+/// A wrapper for using PMDK allocator
 class PMDKAllocator : IAllocator {
  public:
   PMDKAllocator(PMEMobjpool *pop, const char *file_name): pop(pop), file_name(file_name) {}
