@@ -108,7 +108,7 @@ class LinuxEnvironment : public IEnvironment {
 class TlsAllocator : public IAllocator {
  public:
   static const uint64_t MB = 1024 * 1024;
-  static const uint64_t kNumaMemorySize = 1000 * MB;
+  static const uint64_t kNumaMemorySize = 4096 * MB;
   char** numa_memory_;
   uint64_t* numa_allocated_;
 
