@@ -16,7 +16,7 @@
 #include <glog/logging.h>
 #include <glog/raw_logging.h>
 
-#ifdef PMEM
+#ifdef PMDK
 #include <libpmemobj.h>
 #endif
 
@@ -398,7 +398,7 @@ class DefaultAllocator : IAllocator {
 
 };
 
-#ifdef PMEM
+#ifdef PMDK
 
 #define CREATE_MODE_RW (S_IWUSR | S_IRUSR)
 POBJ_LAYOUT_BEGIN(allocator);
@@ -542,6 +542,6 @@ class PMDKAllocator : IAllocator {
   PMEMobjpool *pop;
   const char *file_name;
 };
-#endif  // PMEM
+#endif  // PMDK
 
 }

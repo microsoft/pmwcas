@@ -7,7 +7,7 @@
 #include <intrin.h>
 #endif
 
-#ifdef PMEM
+#ifdef PMDK
 #include <libpmemobj.h>
 #endif
 
@@ -87,10 +87,12 @@ struct NVRAM {
       }
 #endif
     }
+#ifdef PMDK
     auto pmdk_allocator = reinterpret_cast<PMDKAllocator*>(Allocator::Get());
     pmdk_allocator->PersistPtr(data, bytes);
+#endif  // PMDK
   }
-#endif
+#endif  // PMEM
 };
 
 }  // namespace pmwcas
