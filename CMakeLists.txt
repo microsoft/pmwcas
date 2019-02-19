@@ -39,7 +39,7 @@ string(TOUPPER ${PMEM_BACKEND} PMEM_BACKEND)
 
 # Both volatile and persistent versions are supported, by setting PMEM_BACKEND to:
 # PMDK    : use PMDK for persistence
-# PMEMEMU : use simple shared memory for emulating persistent memory. This
+# EMU     : use simple shared memory for emulating persistent memory. This
 #           should only be used for experimental and profiling purpose. No real
 #           persistence is guaranteed.
 # VOLATILE: turn off persistence and build a volatile version, no persistence
