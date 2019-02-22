@@ -264,16 +264,13 @@ class TlsAllocator : public IAllocator {
     free(allocator);
   }
 
-  void* Allocate(size_t nSize) {
-    void* mem = nullptr;
-    void* pBytes = TlsAllocate(nSize);
-    DCHECK(pBytes);
-    return pBytes;
+  void Allocate(void **mem, size_t nSize) override {
+    *mem= TlsAllocate(nSize);
+    DCHECK(*mem);
   }
 
-  void* CAlloc(size_t count, size_t size) {
+  void CAlloc(void **mem, size_t count, size_t size) override {
     /// TODO(tzwang): not implemented yet
-    return nullptr;
   }
 
   void Free(void* pBytes) {
@@ -290,10 +287,10 @@ class TlsAllocator : public IAllocator {
     }
   }
 
-  void* AllocateAligned(size_t nSize, uint32_t nAlignment) {
+  void AllocateAligned(void **mem, size_t nSize, uint32_t nAlignment) override {
     /// TODO(tzwang): take care of aligned allocations
     RAW_CHECK(nAlignment == kCacheLineSize, "unsupported alignment.");
-    return Allocate(nSize);
+    Allocate(mem, nSize);
   }
 
   void FreeAligned(void* pBytes) {
@@ -301,14 +298,12 @@ class TlsAllocator : public IAllocator {
     return Free(pBytes);
   }
 
-  void* AllocateAlignedOffset(size_t size, size_t alignment, size_t offset) {
+  void AllocateAlignedOffset(void **mem, size_t size, size_t alignment, size_t offset) override{
     /// TODO(tzwang): not implemented yet
-    return nullptr;
   }
 
-  void* AllocateHuge(size_t size) {
+  void AllocateHuge(void **mem, size_t size) {
     /// TODO(tzwang): not implemented yet
-    return nullptr;
   }
 
   Status Validate(void* pBytes) {
@@ -346,39 +341,37 @@ class DefaultAllocator : IAllocator {
     free(allocator);
   }
 
-  void* Allocate(size_t nSize) {
-    void* mem = nullptr;
-    int n = posix_memalign(&mem, kCacheLineSize, nSize);
-    mem = malloc(nSize);
-    return mem;
+  void Allocate(void **mem, size_t nSize) override {
+    int n = posix_memalign(mem, kCacheLineSize, nSize);
+    *mem = malloc(nSize);
   }
 
-  void* CAlloc(size_t count, size_t size) {
+  void CAlloc(void **mem, size_t count, size_t size) override{
     /// TODO(tzwang): not implemented yet
-    return nullptr;
+    return;
   }
 
   void Free(void* pBytes) {
     free(pBytes);
   }
 
-  void* AllocateAligned(size_t nSize, uint32_t nAlignment) {
+  void AllocateAligned(void **mem, size_t nSize, uint32_t nAlignment) override {
     RAW_CHECK(nAlignment == kCacheLineSize, "unsupported alignment.");
-    return Allocate(nSize);
+    return Allocate(mem, nSize);
   }
 
   void FreeAligned(void* pBytes) {
     return Free(pBytes);
   }
 
-  void* AllocateAlignedOffset(size_t size, size_t alignment, size_t offset) {
+  void AllocateAlignedOffset(void **mem, size_t size, size_t alignment, size_t offset) override {
     /// TODO(tzwang): not implemented yet
-    return nullptr;
+    return;
   }
 
-  void* AllocateHuge(size_t size) {
+  void AllocateHuge(void **mem, size_t size) override {
     /// TODO(tzwang): not implemented yet
-    return nullptr;
+    return;
   }
 
   Status Validate(void* pBytes) {
@@ -445,12 +438,15 @@ class PMDKAllocator : IAllocator {
     free(allocator);
   }
 
-  void* Allocate(size_t nSize) override {
-    PMEMoid ptr;
-    if(pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char))){
-      LOG(FATAL) << "POBJ_ALLOC error";
-    }
-    return pmemobj_direct(ptr);
+  void Allocate(void **mem, size_t nSize) override {
+    TX_BEGIN(pop) {
+      PMEMoid ptr;
+      if(pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char))){
+        LOG(FATAL) << "POBJ_ALLOC error";
+      }
+      *mem = pmemobj_direct(ptr);
+      pmemobj_persist(pop, *mem, sizeof(uint64_t));
+    }TX_END
   }
 
   template<typename T>
@@ -497,8 +493,8 @@ class PMDKAllocator : IAllocator {
     pmemobj_persist(pop, ptr, size);
   }
 
-  void* CAlloc(size_t count, size_t size) {
-    return nullptr;
+  void CAlloc(void **mem, size_t count, size_t size) override {
+    // not implemented
   }
 
   void Free(void* pBytes) override {
@@ -508,21 +504,21 @@ class PMDKAllocator : IAllocator {
     POBJ_FREE(&ptr_cpy);
   }
 
-  void* AllocateAligned(size_t nSize, uint32_t nAlignment) override {
+  void AllocateAligned(void **mem, size_t nSize, uint32_t nAlignment) override {
     RAW_CHECK(nAlignment == kCacheLineSize, "unsupported alignment.");
-    return Allocate(nSize);
+    return Allocate(mem, nSize);
   }
 
   void FreeAligned(void* pBytes) override {
     return Free(pBytes);
   }
 
-  void* AllocateAlignedOffset(size_t size, size_t alignment, size_t offset) {
-    return nullptr;
+  void AllocateAlignedOffset(void **mem, size_t size, size_t alignment, size_t offset) override {
+    // not implemented
   }
 
-  void* AllocateHuge(size_t size) {
-    return nullptr;
+  void AllocateHuge(void **mem, size_t size) override{
+    // not implemented
   }
 
   Status Validate(void* pBytes) {
