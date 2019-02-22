@@ -74,9 +74,8 @@ struct MwCas : public Benchmark {
   void Setup(size_t thread_count) {
     // Ideally the descriptor pool is sized to the number of threads in the
     // benchmark to reduce need for new allocations, etc.
-    descriptor_pool_ = reinterpret_cast<DescriptorPool*>(
-                         Allocator::Get()->Allocate(sizeof(DescriptorPool)));
-    Descriptor* pool_va = nullptr;
+    Allocator::Get()->Allocate((void **)&descriptor_pool_, sizeof(DescriptorPool));
+    Descriptor *pool_va = nullptr;
     std::string segname(FLAGS_shm_segment);
     persistent_ = (segname.size() != 0);
     bool old = false;

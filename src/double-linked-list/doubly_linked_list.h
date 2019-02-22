@@ -39,8 +39,9 @@ class IDList {
  public:
   static DListNode* NewNode(DListNode* prev, DListNode* next,
       uint32_t payload_size) {
-    DListNode *node = (DListNode*)Allocator::Get()->Allocate(
-        sizeof(DListNode) + payload_size);
+    DListNode *node = nullptr;
+    Allocator::Get()->Allocate((void **) &node,
+                               sizeof(DListNode) + payload_size);
     new (node) DListNode(prev, next, payload_size);
     return node;
   }

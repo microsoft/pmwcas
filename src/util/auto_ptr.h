@@ -33,15 +33,17 @@ unique_ptr_t<T> make_unique_ptr_aligned_t(T* p) {
 /// Allocate memory without concern for alignment.
 template <typename T>
 unique_ptr_t<T> alloc_unique(size_t size) {
-  return make_unique_ptr_t<T>(reinterpret_cast<T*>(
-      Allocator::Get()->Allocate(size)));
+  T *ptr = nullptr;
+  Allocator::Get()->Allocate((void **) ptr, size);
+  return make_unique_ptr_t<T>(ptr);
 }
 
 /// Allocate memory, aligned at the specified alignment.
 template <typename T>
 unique_ptr_t<T> alloc_unique_aligned(size_t size, size_t alignment) {
-  return make_unique_ptr_aligned_t<T>(reinterpret_cast<T*>(
-      Allocator::Get()->AllocateAligned(size, alignment)));
+  T* ptr=nullptr;
+  Allocator::Get()->AllocateAligned((void **)&ptr, size, alignment);
+  return make_unique_ptr_aligned_t<T>(ptr);
 }
 
 template<typename T>

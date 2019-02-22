@@ -187,7 +187,8 @@ DescriptorPool::DescriptorPool(
     }
   } else {
     // No existing pool space provided, create one, but won't support recovery
-    descriptors_ = (Descriptor*)Allocator::Get()->AllocateAligned(
+    Allocator::Get()->AllocateAligned(
+        (void **) &descriptors_,
         sizeof(Descriptor) * pool_size_, kCacheLineSize);
     RAW_CHECK(descriptors_, "out of memory");
   }
@@ -273,7 +274,9 @@ inline void Descriptor::Initialize() {
 }
 
 void* Descriptor::DefaultAllocateCallback(size_t size) {
-  return Allocator::Get()->AllocateAligned(size, kCacheLineSize);
+  void *mem = nullptr;
+  Allocator::Get()->AllocateAligned(&mem, size, kCacheLineSize);
+  return mem;
 }
 
 void Descriptor::DefaultFreeCallback(void* context, void* p) {
