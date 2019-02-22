@@ -124,8 +124,6 @@ struct MwCas : public Benchmark {
                               sizeof(Descriptor) * FLAGS_descriptor_pool_size);
       LOG(INFO) << "Initialized new descriptor pool and data areas";
     }
-    pool_va = (Descriptor*)((uintptr_t)segment->GetMapAddress() +
-      sizeof(DescriptorPool::Metadata));
 #else
     // Allocate the thread array and initialize to consecutive even numbers
     test_array_ = reinterpret_cast<CasPtr*>(
@@ -139,8 +137,7 @@ struct MwCas : public Benchmark {
       test_array_[i] = uint64_t(i * 4);
     }
 #endif
-    new(descriptor_pool_) DescriptorPool(
-      FLAGS_descriptor_pool_size, FLAGS_threads, pool_va, FLAGS_enable_stats);
+    DescriptorPool::Recovery(descriptor_pool_, FLAGS_enable_stats);
     // Recovering from an existing descriptor pool wouldn't cause the data area
     // to be re-initialized, rather this provides us the opportunity to do a
     // sanity check: no field should still point to a descriptor after recovery.

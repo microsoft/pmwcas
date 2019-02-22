@@ -29,7 +29,7 @@ const std::string kSharedMemorySegmentName = "mwcastest";
 GTEST_TEST(PMwCASTest, SingleThreadedUpdateSuccess) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count, nullptr));
+    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count));
   RandomNumberGenerator rng(rand(), 0, kTestArraySize);
   PMwCASPtr test_array[kTestArraySize];
   PMwCASPtr* addresses[kWordsToUpdate];
@@ -77,7 +77,7 @@ GTEST_TEST(PMwCASTest, SingleThreadedUpdateSuccess) {
 GTEST_TEST(PMwCASTest, SingleThreadedAbort) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count, nullptr));
+    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count));
   RandomNumberGenerator rng(rand(), 0, kTestArraySize);
   PMwCASPtr test_array[kTestArraySize];
   PMwCASPtr* addresses[kWordsToUpdate];
@@ -122,7 +122,7 @@ GTEST_TEST(PMwCASTest, SingleThreadedAbort) {
 GTEST_TEST(PMwCASTest, SingleThreadedConflict) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count, nullptr));
+    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count));
   RandomNumberGenerator rng(rand(), 0, kTestArraySize);
   PMwCASPtr test_array[kTestArraySize];
   PMwCASPtr* addresses[kWordsToUpdate];

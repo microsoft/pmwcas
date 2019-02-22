@@ -149,7 +149,7 @@ struct DListBench : public Benchmark {
 #endif
     } else if(FLAGS_sync == "mwcas") {
       DescriptorPool* pool = new DescriptorPool(
-        FLAGS_mwcas_desc_pool_size, FLAGS_threads, nullptr);
+        FLAGS_mwcas_desc_pool_size, FLAGS_threads);
       dll = new MwCASDList(pool);
     } else if(FLAGS_sync == "pmwcas") {
 #ifdef PMEM
@@ -160,7 +160,7 @@ struct DListBench : public Benchmark {
         NVRAM::InitializeSpin(FLAGS_write_delay_ns, FLAGS_emulate_write_bw);
       }
       DescriptorPool* pool = new DescriptorPool(
-        FLAGS_mwcas_desc_pool_size, FLAGS_threads, nullptr);
+        FLAGS_mwcas_desc_pool_size, FLAGS_threads);
       dll = new MwCASDList(pool);
 #else
       LOG(FATAL) << "PMEM undefined";
