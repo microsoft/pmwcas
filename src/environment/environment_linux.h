@@ -413,26 +413,25 @@ class PMDKAllocator : IAllocator {
     pmemobj_close(pop);
   }
 
-  // FIXME: make it configurable
-  static constexpr const char * pool_name = "pmwcas_pmdk_pool";
-  static constexpr const char * layout_name = "pmwcas_pmdk_layout";
+  static std::function<Status(IAllocator *&)> Create(const char *pool_name,
+                                                     const char *layout_name,
+                                                     uint64_t pool_size) {
+    return [pool_name, layout_name, pool_size](IAllocator *&allocator) {
+      int n = posix_memalign(reinterpret_cast<void **>(&allocator), kCacheLineSize, sizeof(DefaultAllocator));
+      if (n || !allocator) return Status::Corruption("Out of memory");
 
-  static Status Create(IAllocator*& allocator) {
-    int n = posix_memalign(reinterpret_cast<void**>(&allocator), kCacheLineSize, sizeof(DefaultAllocator));
-    if(n || !allocator) return Status::Corruption("Out of memory");
+      PMEMobjpool *tmp_pool;
+      if (!FileExists(pool_name)) {
+        tmp_pool = pmemobj_create(pool_name, layout_name, pool_size, CREATE_MODE_RW);
+        LOG_ASSERT(tmp_pool != nullptr);
+      } else {
+        tmp_pool = pmemobj_open(pool_name, layout_name);
+        LOG_ASSERT(tmp_pool != nullptr);
+      }
 
-    PMEMobjpool *tmp_pool;
-    if(!FileExists(pool_name)) {
-     tmp_pool = pmemobj_create(pool_name, layout_name,
-                               (1024*1024*1024) , CREATE_MODE_RW);
-     LOG_ASSERT(tmp_pool != nullptr);
-    } else {
-      tmp_pool = pmemobj_open(pool_name, layout_name);
-      LOG_ASSERT(tmp_pool != nullptr);
-    }
-
-    new(allocator) PMDKAllocator(tmp_pool, pool_name);
-    return Status::OK();
+      new(allocator) PMDKAllocator(tmp_pool, pool_name);
+      return Status::OK();
+    };
   }
 
   static bool FileExists(const char *pool_path) {

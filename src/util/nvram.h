@@ -61,6 +61,10 @@ struct NVRAM {
   }
 
   static inline void Flush(uint64_t bytes, const void* data) {
+#ifdef PMDK
+    auto pmdk_allocator = reinterpret_cast<PMDKAllocator*>(Allocator::Get());
+    pmdk_allocator->PersistPtr(data, bytes);
+#else
     if(use_clflush) {
       RAW_CHECK(data, "null data");
       uint64_t ncachelines = (bytes + kCacheLineSize - 1) / kCacheLineSize;
@@ -87,9 +91,6 @@ struct NVRAM {
       }
 #endif
     }
-#ifdef PMDK
-    auto pmdk_allocator = reinterpret_cast<PMDKAllocator*>(Allocator::Get());
-    pmdk_allocator->PersistPtr(data, bytes);
 #endif  // PMDK
   }
 #endif  // PMEM
