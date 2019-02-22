@@ -442,6 +442,8 @@ private:
   /// Track the pmdk pool for recovery purpose
   uint64_t pmdk_pool_;
 
+  static void InitDescriptors(DescriptorPool *pool);
+
  public:
   /// Metadata that prefixes the actual pool of descriptors for persistence
   struct Metadata {
@@ -456,16 +458,13 @@ private:
   static_assert(sizeof(Metadata) == kCacheLineSize,
                 "Metadata not of cacheline size");
 
-  DescriptorPool(
-    uint32_t pool_size,
-    uint32_t partition_count,
-    Descriptor* desc_va,
-    bool enable_stats = false);
+  DescriptorPool(uint32_t pool_size, uint32_t partition_count, bool enable_stats = false);
 
   Descriptor* GetDescriptor(){
     return descriptors_;
   }
 
+  static void Recovery(DescriptorPool* pool, bool enable_stats);
 
   ~DescriptorPool();
 

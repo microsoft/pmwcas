@@ -417,7 +417,7 @@ GTEST_TEST(DListTest, CASDMultiThreadInsertDelete) {
 GTEST_TEST(DListTest, MwCASSingleThreadInsert) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count, nullptr));
+      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count));
   std::unique_ptr<MwCASDList> dll(new MwCASDList(pool.get()));
   std::unique_ptr<SingleThreadTest> t (new SingleThreadTest(dll.get()));
   t->TestInsert();
@@ -426,7 +426,7 @@ GTEST_TEST(DListTest, MwCASSingleThreadInsert) {
 GTEST_TEST(DListTest, MwCASSingleThreadDelete) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count, nullptr));
+      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count));
   std::unique_ptr<MwCASDList> dll(new MwCASDList(pool.get()));
   std::unique_ptr<SingleThreadTest> t (new SingleThreadTest(dll.get()));
   t->TestDelete();
@@ -435,7 +435,7 @@ GTEST_TEST(DListTest, MwCASSingleThreadDelete) {
 GTEST_TEST(DListTest, MwCASSingleThreadInsertDelete) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count, nullptr));
+      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count));
   std::unique_ptr<MwCASDList> dll(new MwCASDList(pool.get()));
   std::unique_ptr<SingleThreadTest> t (new SingleThreadTest(dll.get()));
   t->TestInsertDelete();
@@ -444,7 +444,7 @@ GTEST_TEST(DListTest, MwCASSingleThreadInsertDelete) {
 GTEST_TEST(DListTest, MwCASMultiThreadDelete) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count, nullptr));
+      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count));
   std::unique_ptr<MwCASDList> dll(new MwCASDList(pool.get()));
   MultiThreadDeleteTest* t = new MultiThreadDeleteTest(dll.get(), thread_count);
   t->Run(thread_count);
@@ -453,7 +453,7 @@ GTEST_TEST(DListTest, MwCASMultiThreadDelete) {
 GTEST_TEST(DListTest, MwCASMultiThreadInsert) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count, nullptr));
+      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count));
   std::unique_ptr<MwCASDList> dll(new MwCASDList(pool.get()));
   MultiThreadInsertTest* t = new MultiThreadInsertTest(dll.get(), thread_count);
   t->Run(thread_count);
@@ -462,7 +462,7 @@ GTEST_TEST(DListTest, MwCASMultiThreadInsert) {
 GTEST_TEST(DListTest, MwCASMultiThreadInsertDelete) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count, nullptr));
+      new pmwcas::DescriptorPool(descriptor_pool_size, thread_count));
   std::unique_ptr<MwCASDList> dll(new MwCASDList(pool.get()));
   MultiThreadInsertDeleteTest* t = new MultiThreadInsertDeleteTest(
       dll.get(), thread_count);

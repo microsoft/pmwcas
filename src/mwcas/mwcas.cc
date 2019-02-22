@@ -31,10 +31,8 @@ DescriptorPartition::~DescriptorPartition() {
 }
 
 DescriptorPool::DescriptorPool(
-    uint32_t pool_size, uint32_t partition_count, Descriptor* desc_va,
-    bool enable_stats)
+    uint32_t pool_size, uint32_t partition_count, bool enable_stats)
     : pool_size_(pool_size),
-      descriptors_(desc_va),
       partition_count_(partition_count),
       partition_table_(nullptr),
       next_partition_(0) {
@@ -74,149 +72,176 @@ DescriptorPool::DescriptorPool(
     new(&partition_table_[i]) DescriptorPartition(&epoch_, this);
   }
 
-  // If a pool area is provided, recover from it. Otherwise create a new one.
   // A new descriptor pool area always comes zeroed.
   RAW_CHECK(pool_size_ > 0, "invalid pool size");
 
-  if(descriptors_) {
-#ifdef PMDK
-    auto new_pmdk_pool = reinterpret_cast<PMDKAllocator*>(Allocator::Get())->GetPool();
-    uint64_t adjust_offset = (uint64_t)new_pmdk_pool - pmdk_pool_;
-    descriptors_ = reinterpret_cast<Descriptor *>((uint64_t)descriptors_ + adjust_offset);
-#else
-    Metadata *metadata = (Metadata*)((uint64_t)descriptors_ - sizeof(Metadata));
-    RAW_CHECK((uint64_t)metadata->initial_address == (uint64_t)metadata,
-              "invalid initial address");
-    RAW_CHECK(metadata->descriptor_count == pool_size_,
-              "wrong descriptor pool size");
-#endif  // PMDK
-
-    // If it is an existing pool, see if it has anything in it
-    uint64_t in_progress_desc = 0, redo_words = 0, undo_words = 0;
-    if(descriptors_[0].status_ != Descriptor::kStatusInvalid) {
-
-      // Must not be a new pool which comes with everything zeroed
-      for(uint32_t i = 0; i < pool_size_; ++i) {
-        auto& desc = descriptors_[i];
-
-        if(desc.status_ == Descriptor::kStatusInvalid) {
-          // Must be a new pool - comes with everything zeroed but better
-          // find this as we look at the first descriptor.
-          RAW_CHECK(i == 0, "corrupted descriptor pool/data area");
-          break;
-        }
-
-        desc.assert_valid_status();
-#ifdef PMDK
-        // Let's set the real addresses first
-        for(int w = 0; w < desc.count_; ++w) {
-          auto &word = desc.words_[w];
-          word.address_ = (uint64_t *)((uint64_t)word.address_ + adjust_offset);
-        }
-#endif
-
-        // Otherwise do recovery 
-        uint32_t status = desc.status_ & ~Descriptor::kStatusDirtyFlag;
-        if(status == Descriptor::kStatusFinished) {
-          continue;
-        } else if(status == Descriptor::kStatusUndecided ||
-                  status == Descriptor::kStatusFailed) {
-          in_progress_desc++;
-          for(int w = 0; w < desc.count_; ++w) {
-            auto& word = desc.words_[w];
-            uint64_t val = Descriptor::CleanPtr(*word.address_);
-#ifdef PMDK
-            val += adjust_offset;
-#endif
-            if(val == (uint64_t)&desc || val == (uint64_t)&word) {
-              // If it's a CondCAS descriptor, then MwCAS descriptor wasn't
-              // installed/persisted, i.e., new value (succeeded) or old value
-              // (failed) wasn't installed on the field. If it's an MwCAS
-              // descriptor, then the final value didn't make it to the field
-              // (status is Undecided). In both cases we should roll back to old
-              // value.
-              *word.address_ = word.old_value_;
-#ifdef PMEM
-              word.PersistAddress();
-#endif
-              undo_words++;
-              LOG(INFO) << "Applied old value 0x" << std::hex
-                        << word.old_value_ << " at 0x" << word.address_;
-            }
-          }
-        } else {
-          RAW_CHECK(status == Descriptor::kStatusSucceeded, "invalid status");
-          in_progress_desc++;
-
-          for(int w = 0; w < desc.count_; ++w) {
-            auto& word = desc.words_[w];
-
-            uint64_t val = Descriptor::CleanPtr(*word.address_);
-#ifdef PMDK
-            val += adjust_offset;
-#endif
-            RAW_CHECK(val != (uint64_t)&word, "invalid field value");
-
-            if(val == (uint64_t)&desc) {
-              *word.address_ = word.new_value_;
-#ifdef PMEM
-              word.PersistAddress();
-#endif
-              redo_words++;
-              LOG(INFO) << "Applied new value 0x" << std::hex
-                        << word.new_value_ << " at 0x" << word.address_;
-            }
-          }
-        }
-
-        for(int w = 0; w < desc.count_; ++w) {
-          int64_t val = *desc.words_[w].address_;
-
-          RAW_CHECK((val & ~Descriptor::kDirtyFlag) !=
-              ((int64_t)&desc | Descriptor::kMwCASFlag),
-              "invalid word value");
-          RAW_CHECK((val & ~Descriptor::kDirtyFlag) !=
-                ((int64_t)&desc | Descriptor::kCondCASFlag),
-                "invalid word value");
-        }
-      }
-
-      LOG(INFO) << "Found " << in_progress_desc <<
-        " in-progress descriptors, rolled forward " << redo_words <<
-        " words, rolled back " << undo_words << " words";
-    }
-  } else {
-    // No existing pool space provided, create one, but won't support recovery
-    Allocator::Get()->AllocateAligned(
-        (void **) &descriptors_,
-        sizeof(Descriptor) * pool_size_, kCacheLineSize);
-    RAW_CHECK(descriptors_, "out of memory");
-  }
+  // create new pool, but won't support recovery
+  Allocator::Get()->AllocateAligned(
+      (void **) &descriptors_,
+      sizeof(Descriptor) * pool_size_, kCacheLineSize);
+  RAW_CHECK(descriptors_, "out of memory");
 
 #ifdef PMDK
   // Set the new pmdk_pool addr
   pmdk_pool_ = (uint64_t) reinterpret_cast<PMDKAllocator*>(Allocator::Get())->GetPool();
 #endif
 
+  InitDescriptors(this);
+}
+
+void DescriptorPool::Recovery(DescriptorPool *pool, bool enable_stats) {
+  MwCASMetrics::enabled = enable_stats;
+
+  auto s = MwCASMetrics::Initialize();
+  RAW_CHECK(s.ok(), "failed initializing metric objects");
+
+  s = pool->epoch_.Initialize();
+  RAW_CHECK(s.ok(), "epoch initialization failure");
+
+  pool->partition_table_ = (DescriptorPartition *) malloc(sizeof(DescriptorPartition) * pool->partition_count_);
+  RAW_CHECK(nullptr != pool->partition_table_, "out of memory");
+
+  for (uint32_t i = 0; i < pool->partition_count_; ++i) {
+    new(&pool->partition_table_[i]) DescriptorPartition(&pool->epoch_, pool);
+  }
+
+  RAW_CHECK(pool->pool_size_ > 0, "invalid pool size");
+
+#ifdef PMDK
+  auto new_pmdk_pool = reinterpret_cast<PMDKAllocator *>(Allocator::Get())->GetPool();
+  uint64_t adjust_offset = (uint64_t) new_pmdk_pool - pool->pmdk_pool_;
+  pool->descriptors_ = reinterpret_cast<Descriptor *>((uint64_t) pool->descriptors_ + adjust_offset);
+#else
+  Metadata *metadata = (Metadata*)((uint64_t)pool->descriptors_ - sizeof(Metadata));
+  RAW_CHECK((uint64_t)metadata->initial_address == (uint64_t)metadata,
+            "invalid initial address");
+  RAW_CHECK(metadata->descriptor_count == pool->pool_size_,
+            "wrong descriptor pool size");
+#endif  // PMDK
+
+  // begin recovery process
+  // If it is an existing pool, see if it has anything in it
+  uint64_t in_progress_desc = 0, redo_words = 0, undo_words = 0;
+  if (pool->descriptors_[0].status_ != Descriptor::kStatusInvalid) {
+
+    // Must not be a new pool which comes with everything zeroed
+    for (uint32_t i = 0; i < pool->pool_size_; ++i) {
+      auto &desc = pool->descriptors_[i];
+
+      if (desc.status_ == Descriptor::kStatusInvalid) {
+        // Must be a new pool - comes with everything zeroed but better
+        // find this as we look at the first descriptor.
+        RAW_CHECK(i == 0, "corrupted descriptor pool/data area");
+        break;
+      }
+
+      desc.assert_valid_status();
+#ifdef PMDK
+      // Let's set the real addresses first
+      for (int w = 0; w < desc.count_; ++w) {
+        auto &word = desc.words_[w];
+        word.address_ = (uint64_t *) ((uint64_t) word.address_ + adjust_offset);
+      }
+#endif
+
+      // Otherwise do recovery
+      uint32_t status = desc.status_ & ~Descriptor::kStatusDirtyFlag;
+      if (status == Descriptor::kStatusFinished) {
+        continue;
+      } else if (status == Descriptor::kStatusUndecided ||
+          status == Descriptor::kStatusFailed) {
+        in_progress_desc++;
+        for (int w = 0; w < desc.count_; ++w) {
+          auto &word = desc.words_[w];
+          uint64_t val = Descriptor::CleanPtr(*word.address_);
+#ifdef PMDK
+          val += adjust_offset;
+#endif
+          if (val == (uint64_t) &desc || val == (uint64_t) &word) {
+            // If it's a CondCAS descriptor, then MwCAS descriptor wasn't
+            // installed/persisted, i.e., new value (succeeded) or old value
+            // (failed) wasn't installed on the field. If it's an MwCAS
+            // descriptor, then the final value didn't make it to the field
+            // (status is Undecided). In both cases we should roll back to old
+            // value.
+            *word.address_ = word.old_value_;
+#ifdef PMEM
+            word.PersistAddress();
+#endif
+            undo_words++;
+            LOG(INFO) << "Applied old value 0x" << std::hex
+                      << word.old_value_ << " at 0x" << word.address_;
+          }
+        }
+      } else {
+        RAW_CHECK(status == Descriptor::kStatusSucceeded, "invalid status");
+        in_progress_desc++;
+
+        for (int w = 0; w < desc.count_; ++w) {
+          auto &word = desc.words_[w];
+
+          uint64_t val = Descriptor::CleanPtr(*word.address_);
+#ifdef PMDK
+          val += adjust_offset;
+#endif
+          RAW_CHECK(val != (uint64_t) &word, "invalid field value");
+
+          if (val == (uint64_t) &desc) {
+            *word.address_ = word.new_value_;
+#ifdef PMEM
+            word.PersistAddress();
+#endif
+            redo_words++;
+            LOG(INFO) << "Applied new value 0x" << std::hex
+                      << word.new_value_ << " at 0x" << word.address_;
+          }
+        }
+      }
+
+      for (int w = 0; w < desc.count_; ++w) {
+        int64_t val = *desc.words_[w].address_;
+
+        RAW_CHECK((val & ~Descriptor::kDirtyFlag) !=
+            ((int64_t) &desc | Descriptor::kMwCASFlag),
+                  "invalid word value");
+        RAW_CHECK((val & ~Descriptor::kDirtyFlag) !=
+            ((int64_t) &desc | Descriptor::kCondCASFlag),
+                  "invalid word value");
+      }
+    }
+
+    LOG(INFO) << "Found " << in_progress_desc <<
+              " in-progress descriptors, rolled forward " << redo_words <<
+              " words, rolled back " << undo_words << " words";
+  }
+#ifdef PMDK
+  // Set the new pmdk_pool addr
+  pool->pmdk_pool_ = (uint64_t) reinterpret_cast<PMDKAllocator *>(Allocator::Get())->GetPool();
+#endif
+
+  InitDescriptors(pool);
+}
+
+void DescriptorPool::InitDescriptors(DescriptorPool *pool) {
   // (Re-)initialize descriptors. Any recovery business should be done by now,
   // start as a clean slate.
-  RAW_CHECK(descriptors_, "null descriptor pool");
-  memset(descriptors_, 0, sizeof(Descriptor) * pool_size_);
+  RAW_CHECK(pool->descriptors_, "null descriptor pool");
+  memset(pool->descriptors_, 0, sizeof(Descriptor) * pool->pool_size_);
 
   // Distribute this many descriptors per partition
-  RAW_CHECK(pool_size_ > partition_count_,
-      "provided pool size is less than partition count");
-  uint32_t desc_per_partition = pool_size_ / partition_count_;
+  RAW_CHECK(pool->pool_size_ > pool->partition_count_,
+            "provided pool size is less than partition count");
+  uint32_t desc_per_partition = pool->pool_size_ / pool->partition_count_;
 
   uint32_t partition = 0;
-  for(uint32_t i = 0; i < pool_size_; ++i) {
-    auto* desc = descriptors_ + i;
-    DescriptorPartition* p = partition_table_ + partition;
+  for (uint32_t i = 0; i < pool->pool_size_; ++i) {
+    auto *desc = pool->descriptors_ + i;
+    DescriptorPartition *p = pool->partition_table_ + partition;
     new(desc) Descriptor(p);
     desc->next_ptr_ = p->free_list;
     p->free_list = desc;
 
-    if((i + 1) % desc_per_partition == 0) {
+    if ((i + 1) % desc_per_partition == 0) {
       partition++;
     }
   }
@@ -261,7 +286,7 @@ Descriptor* DescriptorPool::AllocateDescriptor(Descriptor::AllocateCallback ac,
   return desc;
 }
 
-Descriptor::Descriptor(DescriptorPartition* partition) 
+Descriptor::Descriptor(DescriptorPartition* partition)
     : owner_partition_(partition) {
   Initialize();
 }
