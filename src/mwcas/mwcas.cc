@@ -95,6 +95,7 @@ void DescriptorPool::Recovery(DescriptorPool *pool, bool enable_stats) {
   auto s = MwCASMetrics::Initialize();
   RAW_CHECK(s.ok(), "failed initializing metric objects");
 
+  new(&pool->epoch_) EpochManager;
   s = pool->epoch_.Initialize();
   RAW_CHECK(s.ok(), "epoch initialization failure");
 
