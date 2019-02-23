@@ -137,7 +137,7 @@ struct MwCas : public Benchmark {
       test_array_[i] = uint64_t(i * 4);
     }
 #endif
-    DescriptorPool::Recovery(descriptor_pool_, FLAGS_enable_stats);
+    descriptor_pool_->Recovery(FLAGS_enable_stats);
     // Recovering from an existing descriptor pool wouldn't cause the data area
     // to be re-initialized, rather this provides us the opportunity to do a
     // sanity check: no field should still point to a descriptor after recovery.

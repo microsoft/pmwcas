@@ -442,7 +442,7 @@ private:
   /// Track the pmdk pool for recovery purpose
   uint64_t pmdk_pool_;
 
-  static void InitDescriptors(DescriptorPool *pool);
+  void InitDescriptors();
 
  public:
   /// Metadata that prefixes the actual pool of descriptors for persistence
@@ -464,7 +464,7 @@ private:
     return descriptors_;
   }
 
-  static void Recovery(DescriptorPool* pool, bool enable_stats);
+  void Recovery(bool enable_stats);
 
   ~DescriptorPool();
 
