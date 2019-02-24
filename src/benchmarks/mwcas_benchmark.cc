@@ -113,6 +113,7 @@ struct MwCas : public Benchmark {
       test_array_ = (CasPtr*)((uintptr_t)segment->GetMapAddress() +
         sizeof(DescriptorPool::Metadata) +
         sizeof(Descriptor) * FLAGS_descriptor_pool_size);
+      descriptor_pool_->Recovery(FLAGS_enable_stats);
     } else {
       // New pool/data area, store this base address, pass it + meatadata_size
       // as desc pool va
@@ -124,10 +125,18 @@ struct MwCas : public Benchmark {
                               sizeof(Descriptor) * FLAGS_descriptor_pool_size);
       LOG(INFO) << "Initialized new descriptor pool and data areas";
     }
+
+    // Recovering from an existing descriptor pool wouldn't cause the data area
+    // to be re-initialized, rather this provides us the opportunity to do a
+    // sanity check: no field should still point to a descriptor after recovery.
+    if(old) {
+      for(uint32_t i = 0; i < FLAGS_array_size; ++i) {
+        RAW_CHECK(((uint64_t)test_array_[i] & 0x1) == 0, "Wrong value");
+      }
+    }
 #else
     // Allocate the thread array and initialize to consecutive even numbers
-    test_array_ = reinterpret_cast<CasPtr*>(
-      Allocator::Get()->Allocate(FLAGS_array_size * sizeof(CasPtr)));
+    Allocator::Get()->Allocate((void **)&test_array_, FLAGS_array_size * sizeof(CasPtr));
 
     // Wrap the test array memory in an auto pointer for easy cleanup, keep the
     // raw pointer to avoid indirection during access
@@ -137,16 +146,6 @@ struct MwCas : public Benchmark {
       test_array_[i] = uint64_t(i * 4);
     }
 #endif
-    descriptor_pool_->Recovery(FLAGS_enable_stats);
-    // Recovering from an existing descriptor pool wouldn't cause the data area
-    // to be re-initialized, rather this provides us the opportunity to do a
-    // sanity check: no field should still point to a descriptor after recovery.
-    if(old) {
-      for(uint32_t i = 0; i < FLAGS_array_size; ++i) {
-        RAW_CHECK(((uint64_t)test_array_[i] & 0x1) == 0, "Wrong value");
-      }
-    }
-
     // Now we can start from a clean slate (perhaps not necessary)
     for(uint32_t i = 0; i < FLAGS_array_size; ++i) {
       test_array_[i] = uint64_t(i * 4);

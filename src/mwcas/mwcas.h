@@ -464,7 +464,9 @@ private:
     return descriptors_;
   }
 
+#ifdef PMEM
   void Recovery(bool enable_stats);
+#endif
 
   ~DescriptorPool();
 

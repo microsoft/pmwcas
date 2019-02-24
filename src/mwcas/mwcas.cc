@@ -33,16 +33,18 @@ DescriptorPartition::~DescriptorPartition() {
 DescriptorPool::DescriptorPool(
     uint32_t pool_size, uint32_t partition_count, bool enable_stats)
     : pool_size_(pool_size),
+      desc_per_partition_(pool_size / partition_count),
       partition_count_(partition_count),
       partition_table_(nullptr),
       next_partition_(0) {
 
   MwCASMetrics::enabled = enable_stats;
+  if (enable_stats) {
+    auto s = MwCASMetrics::Initialize();
+    RAW_CHECK(s.ok(), "failed initializing metric objects");
+  }
 
-  auto s = MwCASMetrics::Initialize();
-  RAW_CHECK(s.ok(), "failed initializing metric objects");
-
-  s = epoch_.Initialize();
+  auto s = epoch_.Initialize();
   RAW_CHECK(s.ok(), "epoch initialization failure");
 
   // Round up pool size to the nearest power of 2
@@ -89,6 +91,7 @@ DescriptorPool::DescriptorPool(
   InitDescriptors();
 }
 
+#ifdef PMEM
 void DescriptorPool::Recovery(bool enable_stats) {
   MwCASMetrics::enabled = enable_stats;
 
@@ -99,6 +102,7 @@ void DescriptorPool::Recovery(bool enable_stats) {
   s = epoch_.Initialize();
   RAW_CHECK(s.ok(), "epoch initialization failure");
 
+  RAW_CHECK(partition_count_ > 0, "invalid partition count");
   partition_table_ = (DescriptorPartition *) malloc(sizeof(DescriptorPartition) * partition_count_);
   RAW_CHECK(nullptr != partition_table_, "out of memory");
 
@@ -106,19 +110,19 @@ void DescriptorPool::Recovery(bool enable_stats) {
     new(&partition_table_[i]) DescriptorPartition(&epoch_, this);
   }
 
+  RAW_CHECK(descriptors_, "invalid descriptor array pointer");
   RAW_CHECK(pool_size_ > 0, "invalid pool size");
-
 #ifdef PMDK
   auto new_pmdk_pool = reinterpret_cast<PMDKAllocator *>(Allocator::Get())->GetPool();
   uint64_t adjust_offset = (uint64_t) new_pmdk_pool - pmdk_pool_;
   descriptors_ = reinterpret_cast<Descriptor *>((uint64_t) descriptors_ + adjust_offset);
 #else
-  Metadata *metadata = (Metadata*)((uint64_t)descriptors_ - sizeof(Metadata));
+  Metadata *metadata = (Metadata*)((uint64_t)this - sizeof(Metadata));
   RAW_CHECK((uint64_t)metadata->initial_address == (uint64_t)metadata,
             "invalid initial address");
   RAW_CHECK(metadata->descriptor_count == pool_size_,
             "wrong descriptor pool size");
-#endif  // PMDK
+#endif  // PMEM
 
   // begin recovery process
   // If it is an existing pool, see if it has anything in it
@@ -222,6 +226,7 @@ void DescriptorPool::Recovery(bool enable_stats) {
 
   InitDescriptors();
 }
+#endif
 
 void DescriptorPool::InitDescriptors() {
   // (Re-)initialize descriptors. Any recovery business should be done by now,
@@ -232,7 +237,6 @@ void DescriptorPool::InitDescriptors() {
   // Distribute this many descriptors per partition
   RAW_CHECK(pool_size_ > partition_count_,
             "provided pool size is less than partition count");
-  uint32_t desc_per_partition = pool_size_ / partition_count_;
 
   uint32_t partition = 0;
   for (uint32_t i = 0; i < pool_size_; ++i) {
@@ -242,7 +246,7 @@ void DescriptorPool::InitDescriptors() {
     desc->next_ptr_ = p->free_list;
     p->free_list = desc;
 
-    if ((i + 1) % desc_per_partition == 0) {
+    if ((i + 1) % desc_per_partition_ == 0) {
       partition++;
     }
   }
