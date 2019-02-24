@@ -416,12 +416,18 @@ struct alignas(kCacheLineSize)DescriptorPartition {
   /// Garbage list holding freed pointers/words waiting to clear epoch
   /// protection before being truly recycled.
   GarbageListUnsafe* garbage_list;
+
+  /// Number of allocated descriptors
+  uint32_t allocated_desc;
 };
 
 class DescriptorPool {
 private:
   /// Total number of descriptors in the pool
   uint32_t pool_size_;
+
+  /// Number of descriptors per partition
+  uint32_t desc_per_partition_;
 
   /// Points to all descriptors
   Descriptor* descriptors_;

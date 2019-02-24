@@ -288,6 +288,13 @@ Descriptor* DescriptorPool::AllocateDescriptor(Descriptor::AllocateCallback ac,
   RAW_CHECK(desc, "null descriptor pointer");
   desc->allocate_callback_ = ac ? ac : Descriptor::DefaultAllocateCallback;
   desc->free_callback_ = fc ? fc : Descriptor::DefaultFreeCallback;
+
+  thread_local uint32_t allocs = 0;
+  if (++allocs == (desc_per_partition_ / 2)) {
+    allocs = 0;
+    tls_part->garbage_list->GetEpoch()->BumpCurrentEpoch();
+  }
+
   return desc;
 }
 
