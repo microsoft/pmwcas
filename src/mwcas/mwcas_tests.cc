@@ -206,7 +206,7 @@ GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
   metadata->descriptor_count = kDescriptorPoolSize;
   metadata->initial_address = (uintptr_t)segment_raw;
 
-  DescriptorPool *pool = (DescriptorPool*)(segment_raw + sizeof(DescriptorPool::Metadata));
+  DescriptorPool *pool = (DescriptorPool*)((char*)segment_raw + sizeof(DescriptorPool::Metadata));
 
   test_array = (PMwCASPtr*)((uintptr_t)segment_raw + sizeof(DescriptorPool) +
     sizeof(DescriptorPool::Metadata) +
