@@ -34,7 +34,7 @@ unique_ptr_t<T> make_unique_ptr_aligned_t(T* p) {
 template <typename T>
 unique_ptr_t<T> alloc_unique(size_t size) {
   T *ptr = nullptr;
-  Allocator::Get()->Allocate((void **) ptr, size);
+  Allocator::Get()->Allocate((void **)&ptr, size);
   return make_unique_ptr_t<T>(ptr);
 }
 
