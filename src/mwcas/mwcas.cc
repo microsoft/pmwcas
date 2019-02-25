@@ -838,7 +838,9 @@ bool Descriptor::Cleanup() {
   RAW_CHECK(status_ == kStatusFailed || status_ == kStatusSucceeded,
       "invalid status");
 
-  if(status_ == kStatusSucceeded) {
+  bool success = (status_ == kStatusSucceeded);
+
+  if(success) {
     MwCASMetrics::AddSucceededUpdate();
   } else {
     MwCASMetrics::AddFailedUpdate();
@@ -861,20 +863,12 @@ bool Descriptor::Cleanup() {
       Descriptor::FreeDescriptor, nullptr);
   RAW_CHECK(s.ok(), "garbage list push() failed");
   DCHECK(owner_partition_->garbage_list->GetEpoch()->IsProtected());
-  return status_ == kStatusSucceeded;
+  return success;
 }
 
 Status Descriptor::Abort() {
   RAW_CHECK(status_ == kStatusFinished, "cannot abort under current status");
   status_ = kStatusFailed;
-  auto s = owner_partition_->garbage_list->Push(this,
-      Descriptor::FreeDescriptor, nullptr);
-  RAW_CHECK(s.ok(), "garbage list push() failed");
-  return s;
-}
-
-Status Descriptor::Finish() {
-  RAW_CHECK(status_ == kStatusFinished, "cannot abort under current status");
   auto s = owner_partition_->garbage_list->Push(this,
       Descriptor::FreeDescriptor, nullptr);
   RAW_CHECK(s.ok(), "garbage list push() failed");

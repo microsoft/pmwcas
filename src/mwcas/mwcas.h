@@ -223,9 +223,6 @@ public:
   /// Abort the MwCAS operation, can be used only before the operation starts.
   Status Abort();
 
-  // Abort the operation mark it as succeeded.
-  Status Finish();
-
 private:
   /// Allow tests to access privates for failure injection purposes.
   FRIEND_TEST(PMwCASTest, SingleThreadedRecovery);
