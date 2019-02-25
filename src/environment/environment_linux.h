@@ -343,7 +343,7 @@ class DefaultAllocator : IAllocator {
 
   void Allocate(void **mem, size_t nSize) override {
     int n = posix_memalign(mem, kCacheLineSize, nSize);
-    *mem = malloc(nSize);
+    RAW_CHECK(n == 0, "allocator error.");
   }
 
   void CAlloc(void **mem, size_t count, size_t size) override{
