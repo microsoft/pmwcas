@@ -18,23 +18,23 @@ CoreLocal<MwCASMetrics*> MwCASMetrics::instance;
 
 DescriptorPartition::DescriptorPartition(EpochManager* epoch,
     DescriptorPool* pool)
-    : desc_pool(pool) {
+    : desc_pool(pool), allocated_desc(0) {
   free_list = nullptr;
-  garbage_list = (GarbageListUnsafe*)malloc(sizeof(GarbageListUnsafe));
-  new(garbage_list) GarbageListUnsafe;
+  garbage_list = new GarbageListUnsafe;
   auto s = garbage_list->Initialize(epoch);
   RAW_CHECK(s.ok(), "garbage list initialization failure");
 }
 
 DescriptorPartition::~DescriptorPartition() {
-    garbage_list->Uninitialize();
+  garbage_list->Uninitialize();
+  delete garbage_list;
 }
 
 DescriptorPool::DescriptorPool(
-    uint32_t pool_size, uint32_t partition_count, bool enable_stats)
-    : pool_size_(pool_size),
-      desc_per_partition_(pool_size / partition_count),
-      partition_count_(partition_count),
+    uint32_t requested_pool_size, uint32_t requested_partition_count, bool enable_stats)
+    : pool_size_(0),
+      desc_per_partition_(0),
+      partition_count_(0),
       partition_table_(nullptr),
       next_partition_(0) {
 
@@ -48,24 +48,22 @@ DescriptorPool::DescriptorPool(
   RAW_CHECK(s.ok(), "epoch initialization failure");
 
   // Round up pool size to the nearest power of 2
-  auto pool_size_requested = pool_size_;
   pool_size_ = 1;
-  while (true) {
-    if(pool_size_requested <= pool_size_) {
-      break;
-    }
+  while (requested_pool_size > pool_size_) {
     pool_size_ *= 2;
   }
 
   // Round partitions to a power of two but no higher than 1024
-  auto requested = partition_count_;
   partition_count_ = 1;
   for(uint32_t exp = 1; exp < 10; exp++) {
-    if(requested <= partition_count_) {
+    if(requested_partition_count <= partition_count_) {
       break;
     }
     partition_count_ *= 2;
   }
+
+  desc_per_partition_ = pool_size_ / partition_count_;
+  RAW_CHECK(desc_per_partition_ > 0, "descriptor per partition is 0");
 
   partition_table_ = (DescriptorPartition*)malloc(sizeof(DescriptorPartition)*partition_count_);
   RAW_CHECK(nullptr != partition_table_, "out of memory");
@@ -77,7 +75,7 @@ DescriptorPool::DescriptorPool(
   // A new descriptor pool area always comes zeroed.
   RAW_CHECK(pool_size_ > 0, "invalid pool size");
 
-  // create new pool, but won't support recovery
+  // Create a new pool
   Allocator::Get()->AllocateAligned(
       (void **) &descriptors_,
       sizeof(Descriptor) * pool_size_, kCacheLineSize);
@@ -238,16 +236,13 @@ void DescriptorPool::InitDescriptors() {
   RAW_CHECK(pool_size_ > partition_count_,
             "provided pool size is less than partition count");
 
-  uint32_t partition = 0;
-  for (uint32_t i = 0; i < pool_size_; ++i) {
-    auto *desc = descriptors_ + i;
-    DescriptorPartition *p = partition_table_ + partition;
-    new(desc) Descriptor(p);
-    desc->next_ptr_ = p->free_list;
-    p->free_list = desc;
-
-    if ((i + 1) % desc_per_partition_ == 0) {
-      partition++;
+  for (uint32_t i = 0; i < partition_count_; ++i) {
+    DescriptorPartition *p = partition_table_ + i;
+    for (uint32_t d = 0; d < desc_per_partition_; ++d) {
+      Descriptor *desc = descriptors_ + i * desc_per_partition_ + d;
+      new (desc) Descriptor(p);
+      desc->next_ptr_ = p->free_list;
+      p->free_list = desc;
     }
   }
 }
@@ -278,22 +273,26 @@ Descriptor* DescriptorPool::AllocateDescriptor(Descriptor::AllocateCallback ac,
   while(!desc) {
     // See if we can scavenge some descriptors from the garbage list
     tls_part->garbage_list->GetEpoch()->BumpCurrentEpoch();
-    tls_part->garbage_list->Scavenge();
+    auto scavenged = tls_part->garbage_list->Scavenge();
+    tls_part->allocated_desc -= scavenged;
     desc = tls_part->free_list;
+    RAW_CHECK(scavenged > 0 || !desc, "a");
     MwCASMetrics::AddDescriptorScavenge();
   }
   tls_part->free_list = desc->next_ptr_;
+
+  if (++tls_part->allocated_desc >= (desc_per_partition_ / 2)) {
+    tls_part->garbage_list->GetEpoch()->BumpCurrentEpoch();
+    auto scavenged = tls_part->garbage_list->Scavenge();
+    tls_part->allocated_desc -= scavenged;
+    RAW_CHECK(tls_part->allocated_desc <= desc_per_partition_, "more allocated than partition has");
+    MwCASMetrics::AddDescriptorScavenge();
+  }
 
   MwCASMetrics::AddDescriptorAlloc();
   RAW_CHECK(desc, "null descriptor pointer");
   desc->allocate_callback_ = ac ? ac : Descriptor::DefaultAllocateCallback;
   desc->free_callback_ = fc ? fc : Descriptor::DefaultFreeCallback;
-
-  thread_local uint32_t allocs = 0;
-  if (++allocs == (desc_per_partition_ / 2)) {
-    allocs = 0;
-    tls_part->garbage_list->GetEpoch()->BumpCurrentEpoch();
-  }
 
   return desc;
 }

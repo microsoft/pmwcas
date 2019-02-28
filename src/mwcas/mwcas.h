@@ -173,14 +173,14 @@ public:
   void Initialize();
 
   /// Executes the multi-word compare and swap operation.
-  bool MwCAS(uint32_t calldepth = 0) {
+  bool MwCAS() {
     RAW_CHECK(status_ == kStatusFinished,
       "status of descriptor is not kStatusFinished");
     status_ = kStatusUndecided;
 #ifdef PMEM
-    return PersistentMwCAS(calldepth);
+    return PersistentMwCAS(0);
 #else
-    return VolatileMwCAS(calldepth);
+    return VolatileMwCAS(0);
 #endif
   }
 

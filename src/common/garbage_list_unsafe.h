@@ -252,6 +252,7 @@ class GarbageListUnsafe : public IGarbageList {
       item.destroy_callback_context = nullptr;
       item.removed_item = nullptr;
       *((volatile Epoch*) &item.removal_epoch) = 0;
+      ++scavenged;
     }
 
     return scavenged;
