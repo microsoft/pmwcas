@@ -276,7 +276,7 @@ Descriptor* DescriptorPool::AllocateDescriptor(Descriptor::AllocateCallback ac,
     auto scavenged = tls_part->garbage_list->Scavenge();
     tls_part->allocated_desc -= scavenged;
     desc = tls_part->free_list;
-    RAW_CHECK(scavenged > 0 || !desc, "a");
+    RAW_CHECK(scavenged > 0 || !desc, "scavenged but still not descriptor");
     MwCASMetrics::AddDescriptorScavenge();
   }
   tls_part->free_list = desc->next_ptr_;
