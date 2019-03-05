@@ -99,7 +99,7 @@ public:
 
   /// Garbage list recycle policy: only free [new_value] upon restart
   static const uint32_t kRecycleOnRecovery = 0x1;
-
+  
   /// Garbage list recycle policy: leave the memory alone
   static const uint32_t kRecycleNever = 0x2;
 
@@ -222,9 +222,6 @@ public:
 
   /// Abort the MwCAS operation, can be used only before the operation starts.
   Status Abort();
-
-  /// Tracks the current status of the descriptor.
-  uint32_t status_;
 
 private:
   /// Allow tests to access privates for failure injection purposes.
@@ -376,6 +373,8 @@ private:
   /// howm partition when it is freed.
   DescriptorPartition* owner_partition_;
 
+  /// Tracks the current status of the descriptor.
+  uint32_t status_;
 
   /// Count of actual descriptors held in #WordDesc
   uint32_t count_;
@@ -483,7 +482,7 @@ private:
   // Get a free descriptor from the pool.
   Descriptor* AllocateDescriptor(Descriptor::AllocateCallback ac,
     Descriptor::FreeCallback fc);
-
+  
   // Allocate a free descriptor from the pool using default allocate and
   // free callbacks.
   inline Descriptor* AllocateDescriptor() {
