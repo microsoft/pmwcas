@@ -364,7 +364,7 @@ private:
 
   /// Setting kMaxCount to 4 so MwCASDescriptor occupies three cache lines. If
   /// changing this, also remember to adjust the static assert below.
-  static const int kMaxCount = 4;
+  static const int kMaxCount = 12;
 
   /// Free list pointer for managing free pre-allocated descriptor pools
   Descriptor* next_ptr_;
@@ -391,8 +391,8 @@ private:
   /// Array of word descriptors bounded my kMaxCount
   WordDescriptor words_[kMaxCount];
 };
-static_assert(sizeof(Descriptor) <= 4 * kCacheLineSize,
-    "Descriptor larger than 4 cache lines");
+static_assert(sizeof(Descriptor) <= 12 * kCacheLineSize,
+    "Descriptor larger than 12 cache lines");
 
 /// A partitioned pool of Descriptors used for fast allocation of descriptors.
 /// The pool of descriptors will be bounded by the number of threads actively

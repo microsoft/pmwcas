@@ -653,6 +653,9 @@ inline bool Descriptor::PersistentMwCAS(uint32_t calldepth) {
 
   for(uint32_t i = 0; i < count_ && my_status == kStatusSucceeded; ++i) {
     WordDescriptor* wd = &words_[i];
+    if(!wd->address_){
+      continue;
+    }
 retry_entry:
     auto rval = CondCAS(i, kDirtyFlag);
 
@@ -689,6 +692,9 @@ retry_entry:
   if(my_status == kStatusSucceeded) {
     for (uint32_t i = 0; i < count_; ++i) {
       WordDescriptor* wd = &words_[i];
+      if(!wd->address_){
+        continue;
+      }
       uint64_t val = *wd->address_;
       if(val == descptr) {
         wd->PersistAddress();
@@ -711,6 +717,9 @@ retry_entry:
   bool succeeded = (status_ == kStatusSucceeded);
   for(uint32_t i = 0; i < count_; i++) {
     WordDescriptor* wd = &words_[i];
+    if(!wd->address_){
+      continue;
+    }
     uint64_t val = succeeded ? wd->new_value_ : wd->old_value_;
     val |= kDirtyFlag;
     uint64_t clean_descptr = descptr & ~kDirtyFlag;
