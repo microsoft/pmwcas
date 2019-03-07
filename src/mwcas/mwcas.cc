@@ -359,7 +359,7 @@ inline int Descriptor::GetInsertPosition(uint64_t* addr) {
 
   int insertpos = count_;
   for(int i = count_ - 1; i >= 0; i--) {
-    if(words_[i].address_ == addr) {
+    if(addr && words_[i].address_ == addr) {
       // Can't allow duplicate addresses because it makes the desired result of
       // the operation ambigous. If two different new values are specified for
       // the same address, what is the correct result? Also, if the operation
@@ -367,11 +367,6 @@ inline int Descriptor::GetInsertPosition(uint64_t* addr) {
       // restored.
       return -2;
     }
-    if(words_[i].address_ < addr) {
-      break;
-    }
-    words_[i + 1] = words_[i];
-    insertpos--;
   }
   return insertpos;
 }
@@ -650,6 +645,10 @@ inline bool Descriptor::PersistentMwCAS(uint32_t calldepth) {
     my_status = kStatusFailed;
   }
 #else
+
+  std::sort(words_, words_ + count_, [this](WordDescriptor &a, WordDescriptor &b)->bool{
+    return a.address_ < b.address_;
+  });
 
   for(uint32_t i = 0; i < count_ && my_status == kStatusSucceeded; ++i) {
     WordDescriptor* wd = &words_[i];
