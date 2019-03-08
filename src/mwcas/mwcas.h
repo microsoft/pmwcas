@@ -112,6 +112,10 @@ public:
   /// Garbage list recycle policy: free only [new value] if succeeded
   static const uint32_t kRecycleNewOnFailure = 0x5;
 
+  /// Recycle and installation policy: neither install nor recycle
+  /// only used for allocation purpose
+  static const uint32_t kAllocNullAddress = 0x0;
+
   /// Signaure for garbage free callback (see free_callback_ below)
   typedef void (*FreeCallback)(void* context, void* word);
 

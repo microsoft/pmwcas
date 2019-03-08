@@ -143,6 +143,9 @@ void DescriptorPool::Recovery(bool enable_stats) {
       // Let's set the real addresses first
       for (int w = 0; w < desc.count_; ++w) {
         auto &word = desc.words_[w];
+        if((uint64_t)word.address_ == Descriptor::kAllocNullAddress) {
+          continue;
+        }
         word.address_ = (uint64_t *) ((uint64_t) word.address_ + adjust_offset);
       }
 #endif
@@ -156,6 +159,9 @@ void DescriptorPool::Recovery(bool enable_stats) {
         in_progress_desc++;
         for (int w = 0; w < desc.count_; ++w) {
           auto &word = desc.words_[w];
+          if((uint64_t)word.address_ == Descriptor::kAllocNullAddress){
+            continue;
+          }
           uint64_t val = Descriptor::CleanPtr(*word.address_);
 #ifdef PMDK
           val += adjust_offset;
@@ -183,6 +189,9 @@ void DescriptorPool::Recovery(bool enable_stats) {
         for (int w = 0; w < desc.count_; ++w) {
           auto &word = desc.words_[w];
 
+          if((uint64_t)word.address_ == Descriptor::kAllocNullAddress){
+            continue;
+          }
           uint64_t val = Descriptor::CleanPtr(*word.address_);
 #ifdef PMDK
           val += adjust_offset;
@@ -202,7 +211,10 @@ void DescriptorPool::Recovery(bool enable_stats) {
       }
 
       for (int w = 0; w < desc.count_; ++w) {
-        int64_t val = *desc.words_[w].address_;
+       if((uint64_t)desc.words_[w].address_ == Descriptor::kAllocNullAddress){
+         continue;
+       }
+       int64_t val = *desc.words_[w].address_;
 
         RAW_CHECK((val & ~Descriptor::kDirtyFlag) !=
             ((int64_t) &desc | Descriptor::kMwCASFlag),
@@ -359,7 +371,7 @@ inline int Descriptor::GetInsertPosition(uint64_t* addr) {
 
   int insertpos = count_;
   for(int i = count_ - 1; i >= 0; i--) {
-    if(addr && words_[i].address_ == addr) {
+    if((uint64_t)addr != Descriptor::kAllocNullAddress && words_[i].address_ == addr) {
       // Can't allow duplicate addresses because it makes the desired result of
       // the operation ambigous. If two different new values are specified for
       // the same address, what is the correct result? Also, if the operation
@@ -501,6 +513,9 @@ inline bool Descriptor::VolatileMwCAS(uint32_t calldepth) {
 
   for(uint32_t i = 0; i < count_ && my_status == kStatusSucceeded; i++) {
     WordDescriptor* wd = &words_[i];
+    if((uint64_t)wd->address_ == Descriptor::kAllocNullAddress){
+      continue;
+    }
 retry_entry:
     auto rval = CondCAS(i);
 
@@ -530,6 +545,9 @@ retry_entry:
   bool succeeded = (status_ == kStatusSucceeded);
   for(int i = 0; i < count_; i++) {
     WordDescriptor* wd = &words_[i];
+    if((uint64_t)wd->address_ == Descriptor::kAllocNullAddress){
+      continue;
+    }
     CompareExchange64(wd->address_,
         succeeded ? wd->new_value_ : wd->old_value_, descptr);
   }
@@ -568,6 +586,9 @@ bool Descriptor::VolatileMwCASWithFailure(uint32_t calldepth,
 
   for(uint32_t i = 0; i < count_ && my_status == kStatusSucceeded; i++) {
     WordDescriptor* wd = &words_[i];
+    if((uint64_t)wd->address_ == Descriptor::kAllocNullAddress){
+      continue;
+    }
 retry_entry:
     auto rval = CondCAS(i);
 
@@ -652,7 +673,7 @@ inline bool Descriptor::PersistentMwCAS(uint32_t calldepth) {
 
   for(uint32_t i = 0; i < count_ && my_status == kStatusSucceeded; ++i) {
     WordDescriptor* wd = &words_[i];
-    if(!wd->address_){
+    if((uint64_t)wd->address_ == Descriptor::kAllocNullAddress){
       continue;
     }
 retry_entry:
@@ -691,7 +712,7 @@ retry_entry:
   if(my_status == kStatusSucceeded) {
     for (uint32_t i = 0; i < count_; ++i) {
       WordDescriptor* wd = &words_[i];
-      if(!wd->address_){
+      if((uint64_t)wd->address_ == Descriptor::kAllocNullAddress){
         continue;
       }
       uint64_t val = *wd->address_;
@@ -716,7 +737,7 @@ retry_entry:
   bool succeeded = (status_ == kStatusSucceeded);
   for(uint32_t i = 0; i < count_; i++) {
     WordDescriptor* wd = &words_[i];
-    if(!wd->address_){
+    if((uint64_t)wd->address_ == Descriptor::kAllocNullAddress){
       continue;
     }
     uint64_t val = succeeded ? wd->new_value_ : wd->old_value_;
