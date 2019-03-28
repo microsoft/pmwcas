@@ -24,8 +24,8 @@ else()
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lgtest -lglog -lgflags -lpthread -lrt -lnuma")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lgtest -lglog -lgflags -lpthread -lrt -lnuma")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread -lrt -lnuma")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lpthread -lrt -lnuma")
 endif()
 
 #Always set _DEBUG compiler directive when compiling bits regardless of target OS
@@ -289,6 +289,9 @@ set (PMWCAS_LINK_LIBS
 
 # Set the list of libraries that use pmwcas
 set (PMWCAS_APPS_LINK_LIBS
+  gflags
+  glog
+  gtest
   double-linked-list
 )
 
@@ -310,7 +313,7 @@ if(WIN32)
   set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} shlwapi)
 else()
   set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_LINK_LIBS})
-  set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} "-lgtest -lglog -lgflags -lpthread -lrt -lnuma")
+  set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} "-lpthread -lrt -lnuma")
 endif()
 
 # Set the link libraries to for benchmark binary compilation
@@ -319,7 +322,7 @@ if(WIN32)
   # shlwapi is needed for gflags when compiling on windows
   set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} shlwapi)
 else()
-  set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} "-lgtest -lglog -lgflags -lpthread -lrt -lnuma")
+  set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} "-lpthread -lrt -lnuma")
 endif()
 
 #Function to automate building test binaries with appropriate environment sources
@@ -369,6 +372,11 @@ endif()
 
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
+
+add_dependencies(pmwcas GFlags)
+add_dependencies(pmwcas GLog)
+add_dependencies(pmwcas GTest)
+
 if(${PMEM_BACKEND} STREQUAL "PMDK")
   add_dependencies(pmwcas PMDK)
   add_dependencies(double-linked-list PMDK)
