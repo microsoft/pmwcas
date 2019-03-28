@@ -2,15 +2,19 @@
 
 ![Windows Build Status](https://justinlevandoski.visualstudio.com/_apis/public/build/definitions/c59a8e03-b063-4da5-8b4b-b0092d61c7cb/3/badge "Windows Build Status")
 
-PMwCAS is a library that allows atomically changing multiple 8-byte words on non-volatile memory in a lock-free manner. It allows developers to easily build lock-free data structures for non-volatile memory and requires no custom recovery logic from the application. More details are described in the following paper and extended abstract:
+PMwCAS is a library that allows atomically changing multiple 8-byte words on non-volatile memory in a lock-free manner. It allows developers to easily build lock-free data structures for non-volatile memory and requires no custom recovery logic from the application. More details are described in the following [slide deck](http://www.cs.sfu.ca/~tzwang/pmwcas-slides.pdf), [full paper](http://justinlevandoski.org/papers/ICDE18_mwcas.pdf) and [extended abstract](http://www.cs.sfu.ca/~tzwang/pmwcas-nvmw.pdf):
 
-[Easy Lock-Free Indexing in Non-Volatile Memory](http://justinlevandoski.org/papers/ICDE18_mwcas.pdf).
-Tianzheng Wang, Justin Levandoski and Paul Larson. ICDE 2018.
-
-[Easy Lock-Free Programming in Non-Volatile Memory](http://www.cs.sfu.ca/~tzwang/pmwcas-nvmw.pdf).
-Tianzheng Wang, Justin Levandoski and Paul Larson. NVMW 2019. *Finalist for Memorable Paper Award.*
-
-[Here](http://www.cs.sfu.ca/~tzwang/pmwcas-slides.pdf) is a set of slides introducing PMwCAS.
+```
+Easy Lock-Free Indexing in Non-Volatile Memory.
+Tianzheng Wang, Justin Levandoski and Paul Larson.
+ICDE 2018.
+```
+```
+Easy Lock-Free Programming in Non-Volatile Memory.
+Tianzheng Wang, Justin Levandoski and Paul Larson.
+NVMW 2019.
+Finalist for Memorable Paper Award.
+```
 
 ## Environment and Variants
 
@@ -26,7 +30,7 @@ A persistence mode must be specified at build time through the `PMEM_BACKEND` op
 ## Build (for Linux)
 Suppose we build in a separate directory "build" under the source directory.
 
-To build PMwCAS without using TSX:
+To build PMwCAS without TSX:
 ```
 $ mkdir build
 $ cd build
@@ -34,7 +38,7 @@ $ cmake -DPMEM_BACKEND=[PMDK/Volatile/Emu] -DCMAKE_BUILD_TYPE=[Debug/Release/Rel
 $ make -jN
 ```
 
-To build a volatile PMwCAS variant that uses TSX:
+To build a **volatile** PMwCAS variant that uses TSX to install descriptor pointers:
 ```
 $ mkdir build
 $ cd build
