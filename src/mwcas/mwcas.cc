@@ -318,7 +318,7 @@ inline void Descriptor::Initialize() {
   status_ = kStatusFinished;
   count_ = 0;
   next_ptr_ = nullptr;
-  memset(words_, 0, sizeof(WordDescriptor) * kMaxCount);
+  memset(words_, 0, sizeof(WordDescriptor) * DESC_CAP);
 }
 
 void* Descriptor::DefaultAllocateCallback(size_t size) {
@@ -367,7 +367,7 @@ uint32_t Descriptor::AllocateAndAddEntry(uint64_t* addr, uint64_t oldval,
 
 inline int Descriptor::GetInsertPosition(uint64_t* addr) {
   DCHECK(uint64_t(addr) % sizeof(uint64_t) == 0);
-  RAW_CHECK(count_ < kMaxCount, "too many words");
+  RAW_CHECK(count_ < DESC_CAP, "too many words");
 
   int insertpos = count_;
   for(int i = count_ - 1; i >= 0; i--) {

@@ -73,6 +73,11 @@ if(WITH_RTM)
   add_definitions(-DRTM)
 endif()
 
+# Descriptor capacity - default four words max
+set(DESC_CAP "4" CACHE STRING "Descriptor capacity")
+add_definitions(-DDESC_CAP=${DESC_CAP})
+message(STATUS "Descirptor capacity: ${DESC_CAP}")
+
 # Install gtest as en external project
 set(GTEST_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/gtest")
 set(GTEST_LOCATION "${GTEST_PREFIX}/src/GTestExternal-build")

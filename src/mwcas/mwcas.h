@@ -68,6 +68,11 @@
 #undef ERROR // Avoid collision of ERROR definition in Windows.h with glog
 #endif
 
+#ifndef DESC_CAP
+#define DESC_CAP 4
+#warning "DESC_CAP not defined - setting to 4"
+#endif
+
 #include <stdio.h>
 #include <assert.h>
 #include <cstdint>
@@ -366,10 +371,6 @@ private:
               s == kStatusSucceeded || s == kStatusUndecided, "invalid status");
   }
 
-  /// Setting kMaxCount to 4 so MwCASDescriptor occupies three cache lines. If
-  /// changing this, also remember to adjust the static assert below.
-  static const int kMaxCount = 12;
-
   /// Free list pointer for managing free pre-allocated descriptor pools
   Descriptor* next_ptr_;
 
@@ -392,11 +393,9 @@ private:
   /// the allocated memory will be store in [new_value].
   AllocateCallback allocate_callback_;
 
-  /// Array of word descriptors bounded my kMaxCount
-  WordDescriptor words_[kMaxCount];
+  /// Array of word descriptors bounded DESC_CAP
+  WordDescriptor words_[DESC_CAP];
 };
-static_assert(sizeof(Descriptor) <= 12 * kCacheLineSize,
-    "Descriptor larger than 12 cache lines");
 
 /// A partitioned pool of Descriptors used for fast allocation of descriptors.
 /// The pool of descriptors will be bounded by the number of threads actively
