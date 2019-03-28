@@ -289,8 +289,8 @@ set (PMWCAS_LINK_LIBS
 
 # Set the list of libraries that use pmwcas
 set (PMWCAS_APPS_LINK_LIBS
-  gflags
   glog
+  gflags
   gtest
   double-linked-list
 )
