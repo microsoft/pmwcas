@@ -99,8 +99,8 @@ class GarbageListUnsafe : public IGarbageList {
     }
 
     size_t nItemArraySize = sizeof(*items_) * item_count;
-    items_ = reinterpret_cast<Item*>(Allocator::Get()->AllocateAligned(
-        nItemArraySize, 64));
+    Allocator::Get()->AllocateAligned(
+        (void **) &items_, nItemArraySize, 64);
     if(!items_) return Status::Corruption("Out of memory");
 
     for(size_t i = 0; i < item_count; ++i) new(&items_[i]) Item{};
@@ -252,6 +252,7 @@ class GarbageListUnsafe : public IGarbageList {
       item.destroy_callback_context = nullptr;
       item.removed_item = nullptr;
       *((volatile Epoch*) &item.removal_epoch) = 0;
+      ++scavenged;
     }
 
     return scavenged;

@@ -78,7 +78,7 @@ public:
   static std::mutex registryMutex_;
 
   template<typename ... Args>
-  Thread(Args&& ... args) : std::thread(std::forward<Args>(args) ...) {}
+  Thread(Args&& ... args) : std::thread(std::forward<Args>(args) ...), id_(get_id()) {}
   ~Thread() { ClearTls(true); }
 
   /// Overrides std::thread's join
@@ -98,6 +98,7 @@ public:
 private:
   /// Clear/reset the TLS variables of this thread
   void ClearTls(bool destroy = false);
+  std::thread::id id_;
 };
 
 } // namespace pmwcas

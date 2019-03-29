@@ -29,7 +29,7 @@ const std::string kSharedMemorySegmentName = "mwcastest";
 GTEST_TEST(PMwCASTest, SingleThreadedUpdateSuccess) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count, nullptr));
+    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count));
   RandomNumberGenerator rng(rand(), 0, kTestArraySize);
   PMwCASPtr test_array[kTestArraySize];
   PMwCASPtr* addresses[kWordsToUpdate];
@@ -77,7 +77,7 @@ GTEST_TEST(PMwCASTest, SingleThreadedUpdateSuccess) {
 GTEST_TEST(PMwCASTest, SingleThreadedAbort) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count, nullptr));
+    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count));
   RandomNumberGenerator rng(rand(), 0, kTestArraySize);
   PMwCASPtr test_array[kTestArraySize];
   PMwCASPtr* addresses[kWordsToUpdate];
@@ -122,7 +122,7 @@ GTEST_TEST(PMwCASTest, SingleThreadedAbort) {
 GTEST_TEST(PMwCASTest, SingleThreadedConflict) {
   auto thread_count = Environment::Get()->GetCoreCount();
   std::unique_ptr<pmwcas::DescriptorPool> pool(
-    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count, nullptr));
+    new pmwcas::DescriptorPool(kDescriptorPoolSize, thread_count));
   RandomNumberGenerator rng(rand(), 0, kTestArraySize);
   PMwCASPtr test_array[kTestArraySize];
   PMwCASPtr* addresses[kWordsToUpdate];
@@ -180,16 +180,16 @@ GTEST_TEST(PMwCASTest, SingleThreadedConflict) {
   Thread::ClearRegistry(true);
 }
 
+#ifdef PMEM
 GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
   auto thread_count = Environment::Get()->GetCoreCount();
   RandomNumberGenerator rng(rand(), 0, kTestArraySize);
-  unique_ptr_t<DescriptorPool> pool = alloc_unique<DescriptorPool>(
-    sizeof(DescriptorPool));
   PMwCASPtr* addresses[kWordsToUpdate];
   PMwCASPtr* test_array = nullptr;
 
   // Round shared segment (descriptor pool and test data) up to cacheline size
-  uint64_t segment_size = sizeof(DescriptorPool::Metadata) +
+  uint64_t segment_size = sizeof(DescriptorPool) +
+    sizeof(DescriptorPool::Metadata) +
     sizeof(Descriptor) * kDescriptorPoolSize +
     sizeof(PMwCASPtr) * kTestArraySize;
 
@@ -206,16 +206,16 @@ GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
   metadata->descriptor_count = kDescriptorPoolSize;
   metadata->initial_address = (uintptr_t)segment_raw;
 
-  test_array = (PMwCASPtr*)((uintptr_t)segment_raw +
+  DescriptorPool *pool = (DescriptorPool*)((char*)segment_raw + sizeof(DescriptorPool::Metadata));
+
+  test_array = (PMwCASPtr*)((uintptr_t)segment_raw + sizeof(DescriptorPool) +
     sizeof(DescriptorPool::Metadata) +
     sizeof(Descriptor) * kDescriptorPoolSize);
 
   // Create a new descriptor pool using an existing memory block, which will
   // be reused by new descriptor pools that will recover from whatever is in the
   // pool from previous runs.
-  Descriptor* pool_va =
-    (Descriptor*)((uintptr_t)segment_raw + sizeof(DescriptorPool::Metadata));
-  new(pool.get()) DescriptorPool(kDescriptorPoolSize, thread_count, pool_va);
+  new (pool) DescriptorPool(kDescriptorPoolSize, thread_count, false);
 
   for (uint32_t i = 0; i < kTestArraySize; ++i) {
     test_array[i] = 0ull;
@@ -237,7 +237,7 @@ GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
     addresses[i] = reinterpret_cast<PMwCASPtr*>(&test_array[idx]);
   }
   
-  pool.get()->GetEpoch()->Protect();
+  pool->GetEpoch()->Protect();
 
   Descriptor* descriptor = pool->AllocateDescriptor();
   EXPECT_NE(nullptr, descriptor);
@@ -252,13 +252,11 @@ GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
     EXPECT_EQ(1ull, *((uint64_t*)addresses[i]));
   }
 
-  pool.get()->GetEpoch()->Unprotect();
+  pool->GetEpoch()->Unprotect();
   Thread::ClearRegistry(true);
 
   // Create a fresh descriptor pool from the previous pools existing memory.
-  unique_ptr_t<DescriptorPool> pool2 = alloc_unique<DescriptorPool>(
-    sizeof(DescriptorPool));
-  new(pool2.get()) DescriptorPool(kDescriptorPoolSize, thread_count, pool_va);
+  pool->Recovery(false);
 
   // The prior MwCAS succeeded, so check whether the pool recovered correctly
   // by ensuring the updates are still present.
@@ -266,9 +264,9 @@ GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
     EXPECT_EQ(1ull, *((uint64_t*)addresses[i]));
   }
 
-  pool2.get()->GetEpoch()->Protect();
+  pool->GetEpoch()->Protect();
 
-  descriptor = pool2->AllocateDescriptor();
+  descriptor = pool->AllocateDescriptor();
   EXPECT_NE(nullptr, descriptor);
 
   for (uint32_t i = 0; i < kWordsToUpdate; ++i) {
@@ -279,18 +277,15 @@ GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
 
   Thread::ClearRegistry(true);
 
-  unique_ptr_t<DescriptorPool> pool3 = alloc_unique<DescriptorPool>(
-    sizeof(DescriptorPool));
-  new(pool3.get()) DescriptorPool(kDescriptorPoolSize, thread_count, pool_va);
-
+  pool->Recovery(false);
   // Recovery should have rolled back the previously failed pmwcas.
   for (uint32_t i = 0; i < kWordsToUpdate; ++i) {
     EXPECT_EQ(1ull, *((uint64_t*)addresses[i]));
   }
 
-  pool3.get()->GetEpoch()->Protect();
+  pool->GetEpoch()->Protect();
 
-  descriptor = pool3->AllocateDescriptor();
+  descriptor = pool->AllocateDescriptor();
   EXPECT_NE(nullptr, descriptor);
 
   for (uint32_t i = 0; i < kWordsToUpdate; ++i) {
@@ -301,9 +296,7 @@ GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
 
   Thread::ClearRegistry(true);
 
-  unique_ptr_t<DescriptorPool> pool4 = alloc_unique<DescriptorPool>(
-    sizeof(DescriptorPool));
-  new(pool4.get()) DescriptorPool(kDescriptorPoolSize, thread_count, pool_va);
+  pool->Recovery(false);
 
   // Recovery should have rolled forward the previously failed pmwcas that made
   // it through the first phase (installing all descriptors).
@@ -313,6 +306,7 @@ GTEST_TEST(PMwCASTest, SingleThreadedRecovery) {
 
   Thread::ClearRegistry(true);
 }
+#endif
 
 } // namespace pmwcas
 

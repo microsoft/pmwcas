@@ -68,6 +68,11 @@
 #undef ERROR // Avoid collision of ERROR definition in Windows.h with glog
 #endif
 
+#ifndef DESC_CAP
+#define DESC_CAP 4
+#warning "DESC_CAP not defined - setting to 4"
+#endif
+
 #include <stdio.h>
 #include <assert.h>
 #include <cstdint>
@@ -111,6 +116,10 @@ public:
 
   /// Garbage list recycle policy: free only [new value] if succeeded
   static const uint32_t kRecycleNewOnFailure = 0x5;
+
+  /// Recycle and installation policy: neither install nor recycle
+  /// only used for allocation purpose
+  static const uint32_t kAllocNullAddress = 0x0;
 
   /// Signaure for garbage free callback (see free_callback_ below)
   typedef void (*FreeCallback)(void* context, void* word);
@@ -173,14 +182,14 @@ public:
   void Initialize();
 
   /// Executes the multi-word compare and swap operation.
-  bool MwCAS(uint32_t calldepth = 0) {
+  bool MwCAS() {
     RAW_CHECK(status_ == kStatusFinished,
       "status of descriptor is not kStatusFinished");
     status_ = kStatusUndecided;
 #ifdef PMEM
-    return PersistentMwCAS(calldepth);
+    return PersistentMwCAS(0);
 #else
-    return VolatileMwCAS(calldepth);
+    return VolatileMwCAS(0);
 #endif
   }
 
@@ -362,10 +371,6 @@ private:
               s == kStatusSucceeded || s == kStatusUndecided, "invalid status");
   }
 
-  /// Setting kMaxCount to 4 so MwCASDescriptor occupies three cache lines. If
-  /// changing this, also remember to adjust the static assert below.
-  static const int kMaxCount = 4;
-
   /// Free list pointer for managing free pre-allocated descriptor pools
   Descriptor* next_ptr_;
 
@@ -379,6 +384,7 @@ private:
   /// Count of actual descriptors held in #WordDesc
   uint32_t count_;
 
+
   /// A callback for freeing the words listed in [words_] when recycling the
   /// descriptor. Optional: only for applications that use it.
   FreeCallback free_callback_;
@@ -387,11 +393,9 @@ private:
   /// the allocated memory will be store in [new_value].
   AllocateCallback allocate_callback_;
 
-  /// Array of word descriptors bounded my kMaxCount
-  WordDescriptor words_[kMaxCount];
+  /// Array of word descriptors bounded DESC_CAP
+  WordDescriptor words_[DESC_CAP];
 };
-static_assert(sizeof(Descriptor) <= 4 * kCacheLineSize,
-    "Descriptor larger than 4 cache lines");
 
 /// A partitioned pool of Descriptors used for fast allocation of descriptors.
 /// The pool of descriptors will be bounded by the number of threads actively
@@ -412,12 +416,18 @@ struct alignas(kCacheLineSize)DescriptorPartition {
   /// Garbage list holding freed pointers/words waiting to clear epoch
   /// protection before being truly recycled.
   GarbageListUnsafe* garbage_list;
+
+  /// Number of allocated descriptors
+  uint32_t allocated_desc;
 };
 
 class DescriptorPool {
 private:
   /// Total number of descriptors in the pool
   uint32_t pool_size_;
+
+  /// Number of descriptors per partition
+  uint32_t desc_per_partition_;
 
   /// Points to all descriptors
   Descriptor* descriptors_;
@@ -435,6 +445,11 @@ private:
   /// Epoch manager controling garbage/access to descriptors.
   EpochManager epoch_;
 
+  /// Track the pmdk pool for recovery purpose
+  uint64_t pmdk_pool_;
+
+  void InitDescriptors();
+
  public:
   /// Metadata that prefixes the actual pool of descriptors for persistence
   struct Metadata {
@@ -449,11 +464,15 @@ private:
   static_assert(sizeof(Metadata) == kCacheLineSize,
                 "Metadata not of cacheline size");
 
-  DescriptorPool(
-    uint32_t pool_size,
-    uint32_t partition_count,
-    Descriptor* desc_va,
-    bool enable_stats = false);
+  DescriptorPool(uint32_t pool_size, uint32_t partition_count, bool enable_stats = false);
+
+  Descriptor* GetDescriptor(){
+    return descriptors_;
+  }
+
+#ifdef PMEM
+  void Recovery(bool enable_stats);
+#endif
 
   ~DescriptorPool();
 

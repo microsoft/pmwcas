@@ -33,6 +33,7 @@ Status EpochManager::Initialize() {
   if(epoch_table_) return Status::OK();
 
   MinEpochTable* new_table = new MinEpochTable();
+
   if(new_table == nullptr) return Status::Corruption("Out of memory");
   RETURN_NOT_OK(new_table->Initialize());
 
@@ -150,7 +151,7 @@ Status EpochManager::MinEpochTable::Initialize(uint64_t size) {
   if(!IS_POWER_OF_TWO(size)) return Status::InvalidArgument(
                                         "size not a power of two");
 
-  Entry* new_table= new Entry[size];
+  Entry* new_table = new Entry[size];
   if(!new_table) return Status::Corruption("Out of memory");
 
   // Ensure the table is cacheline size aligned.

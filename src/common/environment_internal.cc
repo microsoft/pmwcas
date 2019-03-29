@@ -34,7 +34,7 @@ void Thread::RegisterTls(uint64_t *ptr, uint64_t val) {
 
 void Thread::ClearTls(bool destroy) {
   std::unique_lock<std::mutex> lock(registryMutex_);
-  auto iter = registry_.find(this->get_id());
+  auto iter = registry_.find(id_);
   if (iter != registry_.end()) {
     auto *list = iter->second;
     for (auto &entry : *list) {
@@ -42,7 +42,7 @@ void Thread::ClearTls(bool destroy) {
     }
     if (destroy) {
       delete list;
-      registry_.erase(this->get_id());
+      registry_.erase(id_);
     } else {
       list->clear();
     }

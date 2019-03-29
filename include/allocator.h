@@ -13,12 +13,12 @@ namespace pmwcas {
 /// allocate memory. See pmwcas::InitLibrary in /include/pmwcas.h.
 class IAllocator {
  public:
-  virtual void* Allocate(size_t size) = 0;
-  virtual void* AllocateAligned(size_t size, uint32_t alignment) = 0;
-  virtual void* AllocateAlignedOffset(size_t size, size_t alignment,
-      size_t offset) = 0;
-  virtual void* AllocateHuge(size_t size) = 0;
-  virtual void* CAlloc(size_t count, size_t size) = 0;
+  virtual void Allocate(void **mem, size_t size) = 0;
+  virtual void AllocateAligned(void **mem, size_t size, uint32_t alignment) = 0;
+  virtual void AllocateAlignedOffset(void **mem, size_t size, size_t alignment,
+                                     size_t offset) = 0;
+  virtual void AllocateHuge(void **mem, size_t size) = 0;
+  virtual void CAlloc(void **mem, size_t count, size_t size) = 0;
   virtual void Free(void* bytes) = 0;
   virtual void FreeAligned(void* bytes) = 0;
   virtual uint64_t GetAllocatedSize(void* bytes) = 0;

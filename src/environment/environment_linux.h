@@ -5,6 +5,7 @@
 
 #include <numa.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 
 #include <cstdint>
 #include <atomic>
@@ -14,6 +15,10 @@
 
 #include <glog/logging.h>
 #include <glog/raw_logging.h>
+
+#ifdef PMDK
+#include <libpmemobj.h>
+#endif
 
 #include "include/environment.h"
 #include "include/allocator.h"
@@ -103,7 +108,7 @@ class LinuxEnvironment : public IEnvironment {
 class TlsAllocator : public IAllocator {
  public:
   static const uint64_t MB = 1024 * 1024;
-  static const uint64_t kNumaMemorySize = 10000 * MB;
+  static const uint64_t kNumaMemorySize = 4096 * MB;
   char** numa_memory_;
   uint64_t* numa_allocated_;
 
@@ -259,16 +264,13 @@ class TlsAllocator : public IAllocator {
     free(allocator);
   }
 
-  void* Allocate(size_t nSize) {
-    void* mem = nullptr;
-    void* pBytes = TlsAllocate(nSize);
-    DCHECK(pBytes);
-    return pBytes;
+  void Allocate(void **mem, size_t nSize) override {
+    *mem= TlsAllocate(nSize);
+    DCHECK(*mem);
   }
 
-  void* CAlloc(size_t count, size_t size) {
+  void CAlloc(void **mem, size_t count, size_t size) override {
     /// TODO(tzwang): not implemented yet
-    return nullptr;
   }
 
   void Free(void* pBytes) {
@@ -285,10 +287,10 @@ class TlsAllocator : public IAllocator {
     }
   }
 
-  void* AllocateAligned(size_t nSize, uint32_t nAlignment) {
+  void AllocateAligned(void **mem, size_t nSize, uint32_t nAlignment) override {
     /// TODO(tzwang): take care of aligned allocations
     RAW_CHECK(nAlignment == kCacheLineSize, "unsupported alignment.");
-    return Allocate(nSize);
+    Allocate(mem, nSize);
   }
 
   void FreeAligned(void* pBytes) {
@@ -296,14 +298,12 @@ class TlsAllocator : public IAllocator {
     return Free(pBytes);
   }
 
-  void* AllocateAlignedOffset(size_t size, size_t alignment, size_t offset) {
+  void AllocateAlignedOffset(void **mem, size_t size, size_t alignment, size_t offset) override{
     /// TODO(tzwang): not implemented yet
-    return nullptr;
   }
 
-  void* AllocateHuge(size_t size) {
+  void AllocateHuge(void **mem, size_t size) {
     /// TODO(tzwang): not implemented yet
-    return nullptr;
   }
 
   Status Validate(void* pBytes) {
@@ -341,39 +341,37 @@ class DefaultAllocator : IAllocator {
     free(allocator);
   }
 
-  void* Allocate(size_t nSize) {
-    void* mem = nullptr;
-    int n = posix_memalign(&mem, kCacheLineSize, nSize);
-    mem = malloc(nSize);
-    return mem;
+  void Allocate(void **mem, size_t nSize) override {
+    int n = posix_memalign(mem, kCacheLineSize, nSize);
+    RAW_CHECK(n == 0, "allocator error.");
   }
 
-  void* CAlloc(size_t count, size_t size) {
+  void CAlloc(void **mem, size_t count, size_t size) override{
     /// TODO(tzwang): not implemented yet
-    return nullptr;
+    return;
   }
 
   void Free(void* pBytes) {
     free(pBytes);
   }
 
-  void* AllocateAligned(size_t nSize, uint32_t nAlignment) {
+  void AllocateAligned(void **mem, size_t nSize, uint32_t nAlignment) override {
     RAW_CHECK(nAlignment == kCacheLineSize, "unsupported alignment.");
-    return Allocate(nSize);
+    return Allocate(mem, nSize);
   }
 
   void FreeAligned(void* pBytes) {
     return Free(pBytes);
   }
 
-  void* AllocateAlignedOffset(size_t size, size_t alignment, size_t offset) {
+  void AllocateAlignedOffset(void **mem, size_t size, size_t alignment, size_t offset) override {
     /// TODO(tzwang): not implemented yet
-    return nullptr;
+    return;
   }
 
-  void* AllocateHuge(size_t size) {
+  void AllocateHuge(void **mem, size_t size) override {
     /// TODO(tzwang): not implemented yet
-    return nullptr;
+    return;
   }
 
   Status Validate(void* pBytes) {
@@ -392,5 +390,153 @@ class DefaultAllocator : IAllocator {
   }
 
 };
+
+#ifdef PMDK
+
+#define CREATE_MODE_RW (S_IWUSR | S_IRUSR)
+POBJ_LAYOUT_BEGIN(allocator);
+POBJ_LAYOUT_TOID(allocator, char);
+POBJ_LAYOUT_END(allocator);
+
+/// A wrapper for using PMDK allocator
+class PMDKAllocator : IAllocator {
+ public:
+  PMDKAllocator(PMEMobjpool *pop, const char *file_name): pop(pop), file_name(file_name) {}
+  ~PMDKAllocator() {
+    pmemobj_close(pop);
+  }
+
+  static std::function<Status(IAllocator *&)> Create(const char *pool_name,
+                                                     const char *layout_name,
+                                                     uint64_t pool_size) {
+    return [pool_name, layout_name, pool_size](IAllocator *&allocator) {
+      int n = posix_memalign(reinterpret_cast<void **>(&allocator), kCacheLineSize, sizeof(DefaultAllocator));
+      if (n || !allocator) return Status::Corruption("Out of memory");
+
+      PMEMobjpool *tmp_pool;
+      if (!FileExists(pool_name)) {
+        tmp_pool = pmemobj_create(pool_name, layout_name, pool_size, CREATE_MODE_RW);
+        LOG_ASSERT(tmp_pool != nullptr);
+      } else {
+        tmp_pool = pmemobj_open(pool_name, layout_name);
+        LOG_ASSERT(tmp_pool != nullptr);
+      }
+
+      new(allocator) PMDKAllocator(tmp_pool, pool_name);
+      return Status::OK();
+    };
+  }
+
+  static bool FileExists(const char *pool_path) {
+    struct stat buffer;
+    return (stat(pool_path, &buffer) == 0);
+  }
+
+  static void Destroy(IAllocator *a) {
+    auto* allocator= static_cast<PMDKAllocator*>(a);
+    allocator->~PMDKAllocator();
+    free(allocator);
+  }
+
+  void Allocate(void **mem, size_t nSize) override {
+    TX_BEGIN(pop) {
+      PMEMoid ptr;
+      if(pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char))){
+        LOG(FATAL) << "POBJ_ALLOC error";
+      }
+      *mem = pmemobj_direct(ptr);
+      pmemobj_persist(pop, *mem, sizeof(uint64_t));
+    }TX_END
+  }
+
+  template<typename T>
+  inline T *GetDirect(T *pmem_offset) {
+    return reinterpret_cast<T *>(
+        reinterpret_cast<uint64_t>(pmem_offset) + reinterpret_cast<char *>(GetPool()));
+  }
+
+  template<typename T>
+  inline T *GetOffset(T *pmem_direct) {
+    return reinterpret_cast<T *>(
+        reinterpret_cast<char *>(pmem_direct) - reinterpret_cast<char *>(GetPool()));
+  }
+
+  void AllocateDirect(void** mem, size_t nSize) {
+    TX_BEGIN(pop) {
+      PMEMoid ptr;
+      if(pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char))){
+        LOG(FATAL) << "POBJ_ALLOC error";
+      }
+      *mem = pmemobj_direct(ptr);
+      pmemobj_persist(pop, *mem, sizeof(uint64_t));
+    }TX_END
+  }
+
+  void* AllocateOff(size_t nSize){
+    PMEMoid ptr;
+    if(pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char))){
+      LOG(FATAL) << "POBJ_ALLOC error";
+    }
+    return reinterpret_cast<void*>(ptr.off);
+  }
+
+
+  void* GetRoot(size_t nSize) {
+    return pmemobj_direct(pmemobj_root(pop, nSize));
+  }
+
+  PMEMobjpool *GetPool(){
+    return pop;
+  }
+
+  void PersistPtr(const void *ptr, uint64_t size){
+    pmemobj_persist(pop, ptr, size);
+  }
+
+  void CAlloc(void **mem, size_t count, size_t size) override {
+    // not implemented
+  }
+
+  void Free(void* pBytes) override {
+    auto oid_ptr = pmemobj_oid(pBytes);
+    TOID(char) ptr_cpy;
+    TOID_ASSIGN(ptr_cpy, oid_ptr);
+    POBJ_FREE(&ptr_cpy);
+  }
+
+  void AllocateAligned(void **mem, size_t nSize, uint32_t nAlignment) override {
+    RAW_CHECK(nAlignment == kCacheLineSize, "unsupported alignment.");
+    return Allocate(mem, nSize);
+  }
+
+  void FreeAligned(void* pBytes) override {
+    return Free(pBytes);
+  }
+
+  void AllocateAlignedOffset(void **mem, size_t size, size_t alignment, size_t offset) override {
+    // not implemented
+  }
+
+  void AllocateHuge(void **mem, size_t size) override{
+    // not implemented
+  }
+
+  Status Validate(void* pBytes) {
+    return Status::OK();
+  }
+
+  uint64_t GetAllocatedSize(void* pBytes) {
+    return 0;
+  }
+
+  int64_t GetTotalAllocationCount() {
+    return 0;
+  }
+
+ private:
+  PMEMobjpool *pop;
+  const char *file_name;
+};
+#endif  // PMDK
 
 }

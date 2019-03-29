@@ -47,6 +47,7 @@ struct MwCASMetrics {
 
   friend MwCASMetrics operator-(MwCASMetrics left, const MwCASMetrics& right) {
     left -= right;
+    return left;
   }
 
   MwCASMetrics()
@@ -94,8 +95,8 @@ struct MwCASMetrics {
 
   static Status ThreadInitialize() {
     if(enabled) {
-      auto *tls_metrics = reinterpret_cast<MwCASMetrics *>(
-        Allocator::Get()->Allocate(sizeof(MwCASMetrics)));
+      MwCASMetrics *tls_metrics = nullptr;
+      Allocator::Get()->Allocate((void **)&tls_metrics, sizeof(MwCASMetrics));
       if (!tls_metrics) {
         return Status::OutOfMemory();
       }

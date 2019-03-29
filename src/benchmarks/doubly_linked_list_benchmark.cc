@@ -94,8 +94,9 @@ struct DllStats {
   uint64_t n_effective_search;
   DllStats() : n_insert(0), n_delete(0), n_search(0), 
     n_effective_insert(0), n_effective_delete(0), n_effective_search(0) {}
-  friend DllStats& operator+(DllStats left, const DllStats& right) {
+  friend DllStats& operator+(DllStats &left, const DllStats& right) {
     left += right;
+    return left;
   }
   DllStats& operator+=(const DllStats& other) {
     n_insert += other.n_insert;
@@ -148,7 +149,7 @@ struct DListBench : public Benchmark {
 #endif
     } else if(FLAGS_sync == "mwcas") {
       DescriptorPool* pool = new DescriptorPool(
-        FLAGS_mwcas_desc_pool_size, FLAGS_threads, nullptr);
+        FLAGS_mwcas_desc_pool_size, FLAGS_threads);
       dll = new MwCASDList(pool);
     } else if(FLAGS_sync == "pmwcas") {
 #ifdef PMEM
@@ -159,7 +160,7 @@ struct DListBench : public Benchmark {
         NVRAM::InitializeSpin(FLAGS_write_delay_ns, FLAGS_emulate_write_bw);
       }
       DescriptorPool* pool = new DescriptorPool(
-        FLAGS_mwcas_desc_pool_size, FLAGS_threads, nullptr);
+        FLAGS_mwcas_desc_pool_size, FLAGS_threads);
       dll = new MwCASDList(pool);
 #else
       LOG(FATAL) << "PMEM undefined";

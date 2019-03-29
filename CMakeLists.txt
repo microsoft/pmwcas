@@ -24,8 +24,8 @@ else()
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lgtest -lglog -lgflags -lpthread -lrt -lnuma")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lgtest -lglog -lgflags -lpthread -lrt -lnuma")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread -lrt -lnuma")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lpthread -lrt -lnuma")
 endif()
 
 #Always set _DEBUG compiler directive when compiling bits regardless of target OS
@@ -33,20 +33,50 @@ set_directory_properties(PROPERTIES COMPILE_DEFINITIONS_DEBUG "_DEBUG")
 
 add_definitions()
 
-# Set PMEM by default to build persistent version
-option(WITH_PMEM "Support persistence" ON)
-if(WITH_PMEM)
+# Set backend to PMDK by default to build persistent version
+set(PMEM_BACKEND "PMDK" CACHE STRING "Persistent memory backend type")
+string(TOUPPER ${PMEM_BACKEND} PMEM_BACKEND)
+
+# Both volatile and persistent versions are supported, by setting PMEM_BACKEND to:
+# PMDK    : use PMDK for persistence
+# EMU     : use simple shared memory for emulating persistent memory. This
+#           should only be used for experimental and profiling purpose. No real
+#           persistence is guaranteed.
+# VOLATILE: turn off persistence and build a volatile version, no persistence
+#           whatsoever. Equivalent to the original MwCAS operation.
+#
+# If persistent memory support is turned on, in the code we define both PMEM and
+# the corresponding macro for the backend. Code that is agnostic to the backend
+# is wrapped by PMEM; code that is specific to the backend is wrapped around by
+# PMEMEMU (for using emulation) or PMDK (for using PMDK).
+if(${PMEM_BACKEND} STREQUAL "PMDK")
   add_definitions(-DPMEM)
+  add_definitions(-DPMDK)
+  message(STATUS "Persistence support: PMDK")
+elseif(${PMEM_BACKEND} STREQUAL "EMU")
+  add_definitions(-DPMEM)
+  add_definitions(-DPMEMEMU)
+  message(STATUS "Persistence support: emulation")
+elseif(${PMEM_BACKEND} STREQUAL "VOLATILE")
+  message(STATUS "Persistence support: off")
+else()
+  message(FATAL_ERROR "Unsupported persistent memory backend: ${PMEM_BACKEND}")
 endif()
 
-# Turn off RTM by default
+# Turn off RTM by default - only allowed when persistence is turned off (i.e.,
+# PMEM_BACKEND == VOLATILE
 option(WITH_RTM "Use RTM for installing descriptors" OFF)
 if(WITH_RTM)
-  if(WITH_PMEM)
+  if(NOT (${PMEM_BACKEND} STREQUAL "VOLATILE"))
     message(FATAL_ERROR "Cannot use RTM with persistence.")
   endif()
   add_definitions(-DRTM)
 endif()
+
+# Descriptor capacity - default four words max
+set(DESC_CAP "4" CACHE STRING "Descriptor capacity")
+add_definitions(-DDESC_CAP=${DESC_CAP})
+message(STATUS "Descirptor capacity: ${DESC_CAP}")
 
 # Install gtest as en external project
 set(GTEST_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/gtest")
@@ -226,6 +256,32 @@ set(GTEST_LIB GTest)
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
+##################### PMDK ####################
+if(${PMEM_BACKEND} STREQUAL "PMDK")
+  set(PMDK_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/pmdk")
+  ExternalProject_Add(PMDK
+    GIT_REPOSITORY https://github.com/pmem/pmdk.git
+    GIT_TAG stable-1.5
+    BUILD_IN_SOURCE 1
+    BUILD_COMMAND $(MAKE)
+    PREFIX ${PMDK_PREFIX}
+    CONFIGURE_COMMAND ""
+    INSTALL_COMMAND ""
+    LOG_DOWNLOAD ON
+    LOG_CONFIGURE ON
+    LOG_BUILD ON
+  )
+
+  include_directories(${PMDK_PREFIX}/src/PMDK/src/include)
+  if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    link_directories(${PMDK_PREFIX}/src/PMDK/src/debug)
+  else()
+    link_directories(${PMDK_PREFIX}/src/PMDK/src/nondebug)
+  endif()
+  link_libraries("-lpmemobj")
+endif()
+##############################################
+
 # Set the directory targets when build in libs and binaries
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -238,6 +294,9 @@ set (PMWCAS_LINK_LIBS
 
 # Set the list of libraries that use pmwcas
 set (PMWCAS_APPS_LINK_LIBS
+  glog
+  gflags
+  gtest
   double-linked-list
 )
 
@@ -259,7 +318,7 @@ if(WIN32)
   set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} shlwapi)
 else()
   set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_LINK_LIBS})
-  set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} "-lgtest -lglog -lgflags -lpthread -lrt -lnuma")
+  set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} "-lpthread -lrt -lnuma")
 endif()
 
 # Set the link libraries to for benchmark binary compilation
@@ -268,7 +327,7 @@ if(WIN32)
   # shlwapi is needed for gflags when compiling on windows
   set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} shlwapi)
 else()
-  set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} "-lgtest -lglog -lgflags -lpthread -lrt -lnuma")
+  set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} "-lpthread -lrt -lnuma")
 endif()
 
 #Function to automate building test binaries with appropriate environment sources
@@ -282,6 +341,9 @@ FUNCTION(ADD_PMWCAS_TEST TEST_NAME)
   target_link_libraries(${TEST_NAME} ${PMWCAS_TEST_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
   target_include_directories(${TEST_NAME} PUBLIC ${gtest_SOURCE_DIR} ${gtest_SOURCE_DIR}/include) 
   add_test(${TEST_NAME} ${CMAKE_BINARY_DIR}/${TEST_NAME})
+  if(${PMEM_BACKEND} STREQUAL "PMDK")
+    add_dependencies(${TEST_NAME} PMDK)
+  endif()
 ENDFUNCTION()
 
 #Function to automate building benchmark binaries with appropriate environment sources
@@ -292,6 +354,9 @@ FUNCTION(ADD_PMWCAS_BENCHMARK BENCHMARK_NAME)
     add_executable(${BENCHMARK_NAME} ${BENCHMARK_HEADERS} ${BENCHMARK_NAME}.cc ${CMAKE_SOURCE_DIR}/${LINUX_ENVIRONMENT_SOURCES})
   endif()
 
+  if(${PMEM_BACKEND} STREQUAL "PMDK")
+    add_dependencies(${BENCHMARK_NAME} PMDK)
+  endif()
   target_link_libraries(${BENCHMARK_NAME} ${PMWCAS_BENCHMARK_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
 ENDFUNCTION()
 
@@ -312,3 +377,12 @@ endif()
 
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
+
+add_dependencies(pmwcas GFlags)
+add_dependencies(pmwcas GLog)
+add_dependencies(pmwcas GTest)
+
+if(${PMEM_BACKEND} STREQUAL "PMDK")
+  add_dependencies(pmwcas PMDK)
+  add_dependencies(double-linked-list PMDK)
+endif()

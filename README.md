@@ -2,21 +2,59 @@
 
 ![Windows Build Status](https://justinlevandoski.visualstudio.com/_apis/public/build/definitions/c59a8e03-b063-4da5-8b4b-b0092d61c7cb/3/badge "Windows Build Status")
 
-PMwCAS is a library that allows atomically changing multiple 8-byte words on non-volatile memory in a lock-free manner. It allows developers to easily build lock-free data structures for non-volatile memory and requires no custom recovery logic from the application. More details are described in [this paper](http://justinlevandoski.org/papers/ICDE18_mwcas.pdf):
+PMwCAS is a library that allows atomically changing multiple 8-byte words on non-volatile memory in a lock-free manner. It allows developers to easily build lock-free data structures for non-volatile memory and requires no custom recovery logic from the application. More details are described in the following [slide deck](http://www.cs.sfu.ca/~tzwang/pmwcas-slides.pdf), [full paper](http://justinlevandoski.org/papers/ICDE18_mwcas.pdf) and [extended abstract](http://www.cs.sfu.ca/~tzwang/pmwcas-nvmw.pdf):
 
 ```
 Easy Lock-Free Indexing in Non-Volatile Memory.
-Tianzheng Wang, Justin Levandoski, Paul Larson.
+Tianzheng Wang, Justin Levandoski and Paul Larson.
 ICDE 2018.
 ```
+```
+Easy Lock-Free Programming in Non-Volatile Memory.
+Tianzheng Wang, Justin Levandoski and Paul Larson.
+NVMW 2019.
+Finalist for Memorable Paper Award.
+```
 
-## Environment
+## Environment and Variants
 
-The current code supports both Windows (CMake + Visual Studio) and Linux (CMake + gcc). 
+The current code supports both Windows (CMake + Visual Studio) and Linux (CMake + gcc/clang) and four variants with different persistence modes:
 
-#### Huge pages and memlock limits (for Linux only)
+1. Persistence using Intel [PMDK](https://pmem.io)
+2. Persistence by emulation with DRAM
+3. Volatile (no persistence support)
+4. Volatile with Intel TSX (using hardware transaction memory to install descriptors, for `Volatile` only)
 
-The Linux variant uses a simple thread-local allocator that uses huge pages. Make sure the system has enough huge pages:
+A persistence mode must be specified at build time through the `PMEM_BACKEND` option in CMake (default PMDK). See below for how to pass this option to CMake.
+
+## Build (for Linux)
+Suppose we build in a separate directory "build" under the source directory.
+
+To build PMwCAS without TSX:
+```
+$ mkdir build
+$ cd build
+$ cmake -DPMEM_BACKEND=[PMDK/Volatile/Emu] -DCMAKE_BUILD_TYPE=[Debug/Release/RelWithDebInfo] ..
+$ make -jN
+```
+
+To build a **volatile** PMwCAS variant that uses TSX to install descriptor pointers:
+```
+$ mkdir build
+$ cd build
+$ cmake -DPMEM_BACKEND=Volatile -DWITH_RTM=1 -DCMAKE_BUILD_TYPE=[Debug/Release/RelWithDebInfo] ..
+$ make -jN
+```
+
+#### Descriptor size
+By default each descriptor can hold up to four words. This can be adjusted at compile-time by specifying the `DESC_CAP` parameter to CMake, for example the following will allow up to 8 words per descriptor:
+```
+$ cmake -DDESC_CAP=8 -DPMEM_BACKEND=Volatile -DWITH_RTM=1 -DCMAKE_BUILD_TYPE=[Debug/Release/RelWithDebInfo] ..
+```
+
+#### Huge pages and memlock limits (for Linux)
+
+Under Linux the `volatile` and `emu` variants use a simple thread-local allocator that uses huge pages. Make sure the system has enough huge pages:
 ```
 sudo sh -c 'echo [x pages] > /proc/sys/vm/nr_hugepages'
 ```
@@ -28,10 +66,7 @@ On Linux `mwcas_shm_server` (see below) requires a proper value for memlock limi
 [user] hard memlock unlimited
 ```
 
-## Build
-Suppose we build in a separate directory "build" under the source directory.
-
-### To build on Windows:
+#### To build on Windows (to be tested for PMDK):
 
 ```
 $ md build
@@ -46,36 +81,6 @@ Then either opening and building pmwcas.sln in Visual Studio, or use:
 ```
 $ msbuild pmwcas.sln /p:Configuration=[Release/Debug]
 ```
-
-### To build on Linux:
-
-```
-$ mkdir build
-$ cd build
-$ cmake -DCMAKE_BUILD_TYPE=[Debug/Release/RelWithDebInfo] ..
-$ make -jN
-```
-
-## Additional Variants
-
-Persistence supported can be turned off/on by (un)defining `WITH_PMEM`. By default the build supports persistence. In addition, the code supports two other volatile MwCAS variants, controlled using macros defined at CMake config time.
-
-* Volatile MwCAS:
-```
-$ mkdir build
-$ cd build
-$ cmake -DWITH_PMEM=0 -DCMAKE_BUILD_TYPE=[Debug/Release/RelWithDebInfo] ..
-$ make -jN
-```
-
-* Volatile MwCAS using Intel TSX hardware transactional memory:
-```
-$ mkdir build
-$ cd build
-$ cmake -DWITH_PMEM=0 -DWITH_RTM=1 -DCMAKE_BUILD_TYPE=[Debug/Release/RelWithDebInfo] ..
-$ make -jN
-```
-Note that `-DWITH_PMEM=1` and `-DWITH_RTM=1` are mutually exclusive. Giving `-DWITH_PMEM=1` (default) will build the library with persistence support.
 
 ## NVRAM Emulation
 

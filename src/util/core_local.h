@@ -38,8 +38,8 @@ class CoreLocal {
     RAW_CHECK(core_count_, "invalid core count");
 
     uint64_t size = core_count_ *
-      ((sizeof(T) + kCacheLineSize - 1) & ~(kCacheLineSize - 1));
-    objects_ = (T*)Allocator::Get()->AllocateAligned(size, kCacheLineSize);
+        ((sizeof(T) + kCacheLineSize - 1) & ~(kCacheLineSize - 1));
+    Allocator::Get()->AllocateAligned((void **) &objects_, size, kCacheLineSize);
     if (!objects_) {
       return Status::OutOfMemory();
     }
