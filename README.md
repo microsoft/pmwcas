@@ -46,6 +46,12 @@ $ cmake -DPMEM_BACKEND=Volatile -DWITH_RTM=1 -DCMAKE_BUILD_TYPE=[Debug/Release/R
 $ make -jN
 ```
 
+#### Descriptor size
+By default each descriptor can hold up to four words. This can be adjusted at compile-time by specifying the `DESC_CAP` parameter to CMake, for example the following will allow up to 8 words per descriptor:
+```
+$ cmake -DDESC_CAP=8 -DPMEM_BACKEND=Volatile -DWITH_RTM=1 -DCMAKE_BUILD_TYPE=[Debug/Release/RelWithDebInfo] ..
+```
+
 #### Huge pages and memlock limits (for Linux)
 
 Under Linux the `volatile` and `emu` variants use a simple thread-local allocator that uses huge pages. Make sure the system has enough huge pages:
