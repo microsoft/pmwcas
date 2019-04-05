@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <unistd.h>
+
 #ifdef WIN32
 #include <intrin.h>
 #endif
@@ -11,8 +13,6 @@
 #include <libpmemobj.h>
 #endif
 
-#include "glog/logging.h"
-#include "glog/raw_logging.h"
 #include "include/environment.h"
 
 namespace pmwcas {

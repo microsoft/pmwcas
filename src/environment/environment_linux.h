@@ -8,13 +8,11 @@
 #include <sys/stat.h>
 
 #include <cstdint>
+#include <iostream>
 #include <atomic>
 #include <memory>
 #include <string>
 #include <unordered_map>
-
-#include <glog/logging.h>
-#include <glog/raw_logging.h>
 
 #ifdef PMDK
 #include <libpmemobj.h>

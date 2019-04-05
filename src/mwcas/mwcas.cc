@@ -5,8 +5,6 @@
 #include <Windows.h>
 #undef ERROR // Avoid collision of ERROR definition in Windows.h with glog
 #endif
-#include "glog/logging.h"
-#include "glog/raw_logging.h"
 #include "include/pmwcas.h"
 #include "mwcas/mwcas.h"
 #include "util/atomics.h"

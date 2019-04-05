@@ -5,18 +5,17 @@
 
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <chrono>
 #include <vector>
 #include <string>
 #include <iomanip>
 #include <ios>
-#include <glog/logging.h>
 #include "common/allocator_internal.h"
 #include "environment/environment_linux.h"
 #include "util/auto_ptr.h"
 #include "util/macros.h"
-#include <glog/logging.h>
 
 namespace pmwcas {
 

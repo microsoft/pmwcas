@@ -77,9 +77,6 @@
 #include <assert.h>
 #include <cstdint>
 #include <mutex>
-#include <gtest/gtest_prod.h>
-#include "glog/logging.h"
-#include "glog/raw_logging.h"
 #include "common/allocator_internal.h"
 #include "common/environment_internal.h"
 #include "common/epoch.h"
@@ -87,6 +84,10 @@
 #include "include/environment.h"
 #include "metrics.h"
 #include "util/nvram.h"
+
+#ifdef GOOGLE_FRAMEWORK
+#include <gtest/gtest_prod.h>
+#endif
 
 namespace pmwcas {
 
@@ -233,8 +234,10 @@ public:
   Status Abort();
 
 private:
+#if defined(GOOGLE_FRAMEWORK) && defined(APPS)
   /// Allow tests to access privates for failure injection purposes.
   FRIEND_TEST(PMwCASTest, SingleThreadedRecovery);
+#endif
 
   friend class DescriptorPool;
 

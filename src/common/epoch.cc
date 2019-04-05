@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-#include <glog/logging.h>
-
 #include "common/epoch.h"
 #include "common/environment_internal.h"
 #include "util/hash.h"

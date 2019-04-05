@@ -13,7 +13,7 @@
 #endif
 
 #include <atomic>
-#include <glog/logging.h>
+#include "macros.h"
 
 namespace pmwcas {
 const static uintptr_t kAtomicAlignment = 4;

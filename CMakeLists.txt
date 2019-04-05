@@ -78,180 +78,190 @@ set(DESC_CAP "4" CACHE STRING "Descriptor capacity")
 add_definitions(-DDESC_CAP=${DESC_CAP})
 message(STATUS "Descirptor capacity: ${DESC_CAP}")
 
-# Install gtest as en external project
-set(GTEST_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/gtest")
-set(GTEST_LOCATION "${GTEST_PREFIX}/src/GTestExternal-build")
-set(GTEST_INCLUDES "${GTEST_PREFIX}/src/GTestExternal/googletest/include")
-set(gtest_force_shared_crt ON CACHE BOOL "Force gtest to use dynamic standard library" )
-include_directories(${GTEST_INCLUDES})
-
-# external project download and build
-ExternalProject_Add(GTestExternal
-  URL ${CMAKE_CURRENT_SOURCE_DIR}/third-party/googletest
-  PREFIX "${GTEST_PREFIX}"
-
-  # cmake arguments
-  CMAKE_ARGS -Dgtest_force_shared_crt=ON
-
-  # Disable install step
-  INSTALL_COMMAND ""
-
-  # Wrap download, configure and build steps in a script to log output
-  LOG_DOWNLOAD ON
-  LOG_CONFIGURE ON
-  LOG_BUILD ON
-)
-
-if (MSVC)
-    set(GTEST_IMPORTED_LOCATION
-        IMPORTED_LOCATION_DEBUG           "${GTEST_LOCATION}/googlemock/gtest/Debug/${CMAKE_STATIC_LIBRARY_PREFIX}gtestd${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        IMPORTED_LOCATION_RELEASE         "${GTEST_LOCATION}/googlemock/gtest/Release/${CMAKE_STATIC_LIBRARY_PREFIX}gtest${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        )
-    set(GTESTMAIN_IMPORTED_LOCATION
-        IMPORTED_LOCATION_DEBUG           "${GTEST_LOCATION}/googlemock/gtest/Debug/${CMAKE_STATIC_LIBRARY_PREFIX}gtest_maind${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        IMPORTED_LOCATION_RELEASE         "${GTEST_LOCATION}/googlemock/gtest/Release/${CMAKE_STATIC_LIBRARY_PREFIX}gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        )
+option(GOOGLE_FRAMEWORK "Use glog, gflags and gtest" ON)
+if(${GOOGLE_FRAMEWORK})
+  add_definitions(-DGOOGLE_FRAMEWORK)
+  message(STATUS "GOOGLE_FRAMEWORK is defined, will use glog, gflags and gtest")
 else()
-    set(GTEST_IMPORTED_LOCATION
-        IMPORTED_LOCATION                 "${GTEST_LOCATION}/googlemock/gtest")
-    set(GTESTMAIN_IMPORTED_LOCATION
-        IMPORTED_LOCATION                 "${GTEST_LOCATION}/googlemock/gtest_main")
-  link_directories(${GTEST_LOCATION})
-  link_directories(${GTEST_LOCATION}/googlemock/gtest)
+  message(STATUS "GOOGLE_FRAMEWORK is not defined, will not use glog, gflags and gtest")
 endif()
 
+if(${GOOGLE_FRAMEWORK})
+# Install gtest as en external project
+  set(GTEST_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/gtest")
+  set(GTEST_LOCATION "${GTEST_PREFIX}/src/GTestExternal-build")
+  set(GTEST_INCLUDES "${GTEST_PREFIX}/src/GTestExternal/googletest/include")
+  set(gtest_force_shared_crt ON CACHE BOOL "Force gtest to use dynamic standard library" )
+  include_directories(${GTEST_INCLUDES})
+
+# external project download and build
+  ExternalProject_Add(GTestExternal
+    URL ${CMAKE_CURRENT_SOURCE_DIR}/third-party/googletest
+    PREFIX "${GTEST_PREFIX}"
+
+    # cmake arguments
+    CMAKE_ARGS -Dgtest_force_shared_crt=ON
+
+    # Disable install step
+    INSTALL_COMMAND ""
+
+    # Wrap download, configure and build steps in a script to log output
+    LOG_DOWNLOAD ON
+    LOG_CONFIGURE ON
+    LOG_BUILD ON
+  )
+
+  if (MSVC)
+      set(GTEST_IMPORTED_LOCATION
+          IMPORTED_LOCATION_DEBUG           "${GTEST_LOCATION}/googlemock/gtest/Debug/${CMAKE_STATIC_LIBRARY_PREFIX}gtestd${CMAKE_STATIC_LIBRARY_SUFFIX}"
+          IMPORTED_LOCATION_RELEASE         "${GTEST_LOCATION}/googlemock/gtest/Release/${CMAKE_STATIC_LIBRARY_PREFIX}gtest${CMAKE_STATIC_LIBRARY_SUFFIX}"
+          )
+      set(GTESTMAIN_IMPORTED_LOCATION
+          IMPORTED_LOCATION_DEBUG           "${GTEST_LOCATION}/googlemock/gtest/Debug/${CMAKE_STATIC_LIBRARY_PREFIX}gtest_maind${CMAKE_STATIC_LIBRARY_SUFFIX}"
+          IMPORTED_LOCATION_RELEASE         "${GTEST_LOCATION}/googlemock/gtest/Release/${CMAKE_STATIC_LIBRARY_PREFIX}gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX}"
+          )
+  else()
+      set(GTEST_IMPORTED_LOCATION
+          IMPORTED_LOCATION                 "${GTEST_LOCATION}/googlemock/gtest")
+      set(GTESTMAIN_IMPORTED_LOCATION
+          IMPORTED_LOCATION                 "${GTEST_LOCATION}/googlemock/gtest_main")
+    link_directories(${GTEST_LOCATION})
+    link_directories(${GTEST_LOCATION}/googlemock/gtest)
+  endif()
+
 # the gtest include directory exists only after it is built
-file(MAKE_DIRECTORY ${GTEST_INCLUDES})
+  file(MAKE_DIRECTORY ${GTEST_INCLUDES})
 
 # define imported library GTest
-add_library(GTest IMPORTED STATIC GLOBAL)
-set_target_properties(GTest PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES     "${GTEST_INCLUDES}"
-    IMPORTED_LINK_INTERFACE_LIBRARIES "${CMAKE_THREAD_LIBS_INIT}"
-    ${GTEST_IMPORTED_LOCATION}
-)
+  add_library(GTest IMPORTED STATIC GLOBAL)
+  set_target_properties(GTest PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES     "${GTEST_INCLUDES}"
+      IMPORTED_LINK_INTERFACE_LIBRARIES "${CMAKE_THREAD_LIBS_INIT}"
+      ${GTEST_IMPORTED_LOCATION}
+  )
 
 # define imported library GTestMain
-add_library(GTestMain IMPORTED STATIC GLOBAL)
-set_target_properties(GTestMain PROPERTIES
-    IMPORTED_LINK_INTERFACE_LIBRARIES GTest
-    ${GTESTMAIN_IMPORTED_LOCATION}
-    )
+  add_library(GTestMain IMPORTED STATIC GLOBAL)
+  set_target_properties(GTestMain PROPERTIES
+      IMPORTED_LINK_INTERFACE_LIBRARIES GTest
+      ${GTESTMAIN_IMPORTED_LOCATION}
+      )
 
 # make GTest depend on GTestExternal
-add_dependencies(GTest GTestExternal)
+  add_dependencies(GTest GTestExternal)
 
 ###############################
 
 # variables to help keep track of gflags paths
-set(GFLAGS_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/gflags")
-set(GFLAGS_LOCATION "${GFLAGS_PREFIX}/src/GFlagsExternal-build")
-set(GFLAGS_INCLUDES "${GFLAGS_PREFIX}/src/GFlagsExternal-build/include")
+  set(GFLAGS_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/gflags")
+  set(GFLAGS_LOCATION "${GFLAGS_PREFIX}/src/GFlagsExternal-build")
+  set(GFLAGS_INCLUDES "${GFLAGS_PREFIX}/src/GFlagsExternal-build/include")
 
 # external project download and build (no install for gtest)
-ExternalProject_Add(GFlagsExternal
-  URL ${CMAKE_CURRENT_SOURCE_DIR}/third-party/gflags-2.1.2/gflags
-  PREFIX "${GFLAGS_PREFIX}"
+  ExternalProject_Add(GFlagsExternal
+    URL ${CMAKE_CURRENT_SOURCE_DIR}/third-party/gflags-2.1.2/gflags
+    PREFIX "${GFLAGS_PREFIX}"
 
-  
-  # Disable install step
-  INSTALL_COMMAND ""
+    
+    # Disable install step
+    INSTALL_COMMAND ""
 
-  # Wrap download, configure and build steps in a script to log output
-  LOG_DOWNLOAD ON
-  LOG_CONFIGURE ON
-  LOG_BUILD ON
-)
+    # Wrap download, configure and build steps in a script to log output
+    LOG_DOWNLOAD ON
+    LOG_CONFIGURE ON
+    LOG_BUILD ON
+  )
 
 # variables defining the import location properties for the generated gtest and
 # gtestmain libraries
-if (MSVC)
-  set(GFLAGS_IMPORTED_LOCATION
-    IMPORTED_LOCATION_DEBUG           "${GFLAGS_LOCATION}/lib/Debug/${CMAKE_STATIC_LIBRARY_PREFIX}gflags${CMAKE_STATIC_LIBRARY_SUFFIX}"
-    IMPORTED_LOCATION_RELEASE         "${GFLAGS_LOCATION}/lib/Release/${CMAKE_STATIC_LIBRARY_PREFIX}gflags${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      )
-else()
-  set(GFLAGS_IMPORTED_LOCATION
-    IMPORTED_LOCATION                 "${GFLAGS_LOCATION}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}gflags${CMAKE_STATIC_LIBRARY_SUFFIX}")
-  link_directories(${GFLAGS_LOCATION}/lib)
-endif()
+  if (MSVC)
+    set(GFLAGS_IMPORTED_LOCATION
+      IMPORTED_LOCATION_DEBUG           "${GFLAGS_LOCATION}/lib/Debug/${CMAKE_STATIC_LIBRARY_PREFIX}gflags${CMAKE_STATIC_LIBRARY_SUFFIX}"
+      IMPORTED_LOCATION_RELEASE         "${GFLAGS_LOCATION}/lib/Release/${CMAKE_STATIC_LIBRARY_PREFIX}gflags${CMAKE_STATIC_LIBRARY_SUFFIX}"
+        )
+  else()
+    set(GFLAGS_IMPORTED_LOCATION
+      IMPORTED_LOCATION                 "${GFLAGS_LOCATION}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}gflags${CMAKE_STATIC_LIBRARY_SUFFIX}")
+    link_directories(${GFLAGS_LOCATION}/lib)
+  endif()
 
 # the gtest include directory exists only after it is build, but it is used/needed
 # for the set_target_properties call below, so make it to avoid an error
-file(MAKE_DIRECTORY ${GFLAGS_INCLUDES})
+  file(MAKE_DIRECTORY ${GFLAGS_INCLUDES})
 
 # define imported library GFlags
-add_library(GFlags IMPORTED STATIC GLOBAL)
-set_target_properties(GFlags PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES     "${GFLAGS_INCLUDES}"
-    IMPORTED_LINK_INTERFACE_LIBRARIES "${CMAKE_THREAD_LIBS_INIT}"
-    ${GFLAGS_IMPORTED_LOCATION}
-)
-include_directories(${GFLAGS_INCLUDES})
-add_dependencies(GFlags GFlagsExternal)
+  add_library(GFlags IMPORTED STATIC GLOBAL)
+  set_target_properties(GFlags PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES     "${GFLAGS_INCLUDES}"
+      IMPORTED_LINK_INTERFACE_LIBRARIES "${CMAKE_THREAD_LIBS_INIT}"
+      ${GFLAGS_IMPORTED_LOCATION}
+  )
+  include_directories(${GFLAGS_INCLUDES})
+  add_dependencies(GFlags GFlagsExternal)
 
 ###############################
 
 # variables to help keep track of glog paths
-set(GLOG_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/glog")
-set(GLOG_LOCATION "${GLOG_PREFIX}/src/GLogExternal-build")
-if(WIN32)
-  set(GLOG_INCLUDES "${GLOG_PREFIX}/src/GLogExternal/src/windows")
-  file(MAKE_DIRECTORY ${GLOG_INCLUDES})
-else()
-  set(APPEND GLOG_INCLUDES "${GLOG_PREFIX}/src/GLogExternal/src")
-  file(MAKE_DIRECTORY "${GLOG_PREFIX}/src/GLogExternal/src")
-  include_directories("${GLOG_PREFIX}/src/GLogExternal/src")
+  set(GLOG_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/glog")
+  set(GLOG_LOCATION "${GLOG_PREFIX}/src/GLogExternal-build")
+  if(WIN32)
+    set(GLOG_INCLUDES "${GLOG_PREFIX}/src/GLogExternal/src/windows")
+    file(MAKE_DIRECTORY ${GLOG_INCLUDES})
+  else()
+    set(APPEND GLOG_INCLUDES "${GLOG_PREFIX}/src/GLogExternal/src")
+    file(MAKE_DIRECTORY "${GLOG_PREFIX}/src/GLogExternal/src")
+    include_directories("${GLOG_PREFIX}/src/GLogExternal/src")
 
-  set(APPEND GLOG_INCLUDES "${GLOG_PREFIX}/src/GLogExternal-build")
-  file(MAKE_DIRECTORY "${GLOG_PREFIX}/src/GLogExternal-build")
-  include_directories("${GLOG_PREFIX}/src/GLogExternal-build")
-endif()
+    set(APPEND GLOG_INCLUDES "${GLOG_PREFIX}/src/GLogExternal-build")
+    file(MAKE_DIRECTORY "${GLOG_PREFIX}/src/GLogExternal-build")
+    include_directories("${GLOG_PREFIX}/src/GLogExternal-build")
+  endif()
 
 # external project download and build (no install for gtest)
-ExternalProject_Add(GLogExternal
-  URL ${CMAKE_CURRENT_SOURCE_DIR}/third-party/glog-0.3.4
-  PREFIX "${GLOG_PREFIX}"
-  DEPENDS GFlagsExternal
-  # cmake arguments
-  CMAKE_ARGS -DCMAKE_PREFIX_PATH=${GFLAGS_LOCATION}
+  ExternalProject_Add(GLogExternal
+    URL ${CMAKE_CURRENT_SOURCE_DIR}/third-party/glog-0.3.4
+    PREFIX "${GLOG_PREFIX}"
+    DEPENDS GFlagsExternal
+    # cmake arguments
+    CMAKE_ARGS -DCMAKE_PREFIX_PATH=${GFLAGS_LOCATION}
 
-  # Disable install step
-  INSTALL_COMMAND ""
+    # Disable install step
+    INSTALL_COMMAND ""
 
-  # Wrap download, configure and build steps in a script to log output
-  LOG_DOWNLOAD ON
-  LOG_CONFIGURE ON
-  LOG_BUILD ON
-)
+    # Wrap download, configure and build steps in a script to log output
+    LOG_DOWNLOAD ON
+    LOG_CONFIGURE ON
+    LOG_BUILD ON
+  )
 
-if (MSVC)
-  set(GLOG_IMPORTED_LOCATION
-    IMPORTED_LOCATION_DEBUG           "${GLOG_LOCATION}/Debug/${CMAKE_STATIC_LIBRARY_PREFIX}glog${CMAKE_STATIC_LIBRARY_SUFFIX}"
-    IMPORTED_LOCATION_RELEASE         "${GLOG_LOCATION}/Release/${CMAKE_STATIC_LIBRARY_PREFIX}glog${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      )
-else()
-  set(GLOG_IMPORTED_LOCATION
-    IMPORTED_LOCATION                 "${GLOG_LOCATION}/${CMAKE_STATIC_LIBRARY_PREFIX}glog${CMAKE_STATIC_LIBRARY_SUFFIX}")
-  link_directories(${GLOG_LOCATION})
-endif()
+  if (MSVC)
+    set(GLOG_IMPORTED_LOCATION
+      IMPORTED_LOCATION_DEBUG           "${GLOG_LOCATION}/Debug/${CMAKE_STATIC_LIBRARY_PREFIX}glog${CMAKE_STATIC_LIBRARY_SUFFIX}"
+      IMPORTED_LOCATION_RELEASE         "${GLOG_LOCATION}/Release/${CMAKE_STATIC_LIBRARY_PREFIX}glog${CMAKE_STATIC_LIBRARY_SUFFIX}"
+        )
+  else()
+    set(GLOG_IMPORTED_LOCATION
+      IMPORTED_LOCATION                 "${GLOG_LOCATION}/${CMAKE_STATIC_LIBRARY_PREFIX}glog${CMAKE_STATIC_LIBRARY_SUFFIX}")
+    link_directories(${GLOG_LOCATION})
+  endif()
 
 # the glog include directory exists only after it is build, but it is used/needed
 # for the set_target_properties call below, so make it to avoid an error
 #file(MAKE_DIRECTORY ${GLOG_INCLUDES})
 
 # define imported library GFlags
-add_library(GLog IMPORTED STATIC GLOBAL)
-set_target_properties(GLog PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES     "${GLOG_INCLUDES}"
-  IMPORTED_LINK_INTERFACE_LIBRARIES "${CMAKE_THREAD_LIBS_INIT}"
-  ${GLOG_IMPORTED_LOCATION}
-)
-add_dependencies(GLog GLogExternal)
+  add_library(GLog IMPORTED STATIC GLOBAL)
+  set_target_properties(GLog PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES     "${GLOG_INCLUDES}"
+    IMPORTED_LINK_INTERFACE_LIBRARIES "${CMAKE_THREAD_LIBS_INIT}"
+    ${GLOG_IMPORTED_LOCATION}
+  )
+  add_dependencies(GLog GLogExternal)
 
-set(GFLAGS_LIB GFlags)
-set(GLOG_LIB GLog)
-set(GTEST_LIB GTest)
+  set(GFLAGS_LIB GFlags)
+  set(GLOG_LIB GLog)
+  set(GTEST_LIB GTest)
+endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -292,13 +302,15 @@ set (PMWCAS_LINK_LIBS
   pmwcas
 )
 
-# Set the list of libraries that use pmwcas
-set (PMWCAS_APPS_LINK_LIBS
-  glog
-  gflags
-  gtest
-  double-linked-list
-)
+if(${GOOGLE_FRAMEWORK})
+  # Set the list of libraries that use pmwcas
+  set (PMWCAS_APPS_LINK_LIBS
+    glog
+    gflags
+    gtest
+    double-linked-list
+  )
+endif()
 
 if(WIN32)
   set(WINDOWS_ENVIRONMENT_SOURCES
@@ -310,28 +322,38 @@ else()
   )
 endif()
 
-# Set the link libraries to for test compilation
-set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_LINK_LIBS} ${GTEST_LIB})
-if(WIN32)
+option(BUILD_APPS "Build tests and benchmarks based on gtest" ON)
+if(${BUILD_APPS})
+  if(NOT GOOGLE_FRAMEWORK)
+    message(FATAL_ERROR "Must enable GOOGLE_FRAMEWORK to be able to build tests and benchmarks") 
+  endif()
+
+  add_definitions(-DAPPS)
+
+  # Set the link libraries to for test compilation
   set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_LINK_LIBS} ${GTEST_LIB})
-  # shlwapi is needed for gflags when compiling on windows
-  set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} shlwapi)
-else()
-  set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_LINK_LIBS})
-  set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} "-lpthread -lrt -lnuma")
-endif()
+  if(WIN32)
+    set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_LINK_LIBS} ${GTEST_LIB})
+    # shlwapi is needed for gflags when compiling on windows
+    set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} shlwapi)
+  else()
+    set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_LINK_LIBS})
+    set (PMWCAS_TEST_LINK_LIBS ${PMWCAS_TEST_LINK_LIBS} "-lpthread -lrt -lnuma")
+  endif()
 
 # Set the link libraries to for benchmark binary compilation
-set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_LINK_LIBS} ${GFLAGS_LIB} ${GLOG_LIB})
-if(WIN32)
-  # shlwapi is needed for gflags when compiling on windows
-  set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} shlwapi)
-else()
-  set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} "-lpthread -lrt -lnuma")
+  set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_LINK_LIBS} ${GFLAGS_LIB} ${GLOG_LIB})
+  if(WIN32)
+    # shlwapi is needed for gflags when compiling on windows
+    set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} shlwapi)
+  else()
+    set (PMWCAS_BENCHMARK_LINK_LIBS ${PMWCAS_BENCHMARK_LINK_LIBS} "-lpthread -lrt -lnuma")
+  endif()
 endif()
 
 #Function to automate building test binaries with appropriate environment sources
 FUNCTION(ADD_PMWCAS_TEST TEST_NAME)
+if(${BUILD_APPS})
   if(WIN32)
     add_executable(${TEST_NAME} ${TEST_NAME}.cc ${CMAKE_SOURCE_DIR}/${WINDOWS_ENVIRONMENT_SOURCES})
   else()
@@ -344,10 +366,12 @@ FUNCTION(ADD_PMWCAS_TEST TEST_NAME)
   if(${PMEM_BACKEND} STREQUAL "PMDK")
     add_dependencies(${TEST_NAME} PMDK)
   endif()
+endif()
 ENDFUNCTION()
 
 #Function to automate building benchmark binaries with appropriate environment sources
 FUNCTION(ADD_PMWCAS_BENCHMARK BENCHMARK_NAME)
+if(${BUILD_APPS})
   if(WIN32)
     add_executable(${BENCHMARK_NAME} ${BENCHMARK_HEADERS} ${BENCHMARK_NAME}.cc ${CMAKE_SOURCE_DIR}/${WINDOWS_ENVIRONMENT_SOURCES})
   else()
@@ -358,6 +382,7 @@ FUNCTION(ADD_PMWCAS_BENCHMARK BENCHMARK_NAME)
     add_dependencies(${BENCHMARK_NAME} PMDK)
   endif()
   target_link_libraries(${BENCHMARK_NAME} ${PMWCAS_BENCHMARK_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
+endif()
 ENDFUNCTION()
 
 # Build each subdirectory
@@ -366,7 +391,9 @@ add_subdirectory(src/environment)
 add_subdirectory(src/common)
 add_subdirectory(src/benchmarks)
 add_subdirectory(src/mwcas)
-add_subdirectory(src/double-linked-list)
+if (${BUILD_APPS})
+  add_subdirectory(src/double-linked-list)
+endif()
 
 # Generate a shared library for applications to link
 if(WIN32)
@@ -378,11 +405,15 @@ endif()
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
 
-add_dependencies(pmwcas GFlags)
-add_dependencies(pmwcas GLog)
-add_dependencies(pmwcas GTest)
+if(${GOOGLE_FRAMEWORK})
+  add_dependencies(pmwcas GFlags)
+  add_dependencies(pmwcas GLog)
+  add_dependencies(pmwcas GTest)
+endif()
 
 if(${PMEM_BACKEND} STREQUAL "PMDK")
   add_dependencies(pmwcas PMDK)
-  add_dependencies(double-linked-list PMDK)
+  if (${BUILD_APPS})
+    add_dependencies(double-linked-list PMDK)
+  endif()
 endif()
