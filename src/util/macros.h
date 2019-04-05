@@ -39,5 +39,6 @@ namespace pmwcas {
 #define LOG(...) std::cout
 #define LOG_IF(FATAL, ...) std::cout
 #define CHECK_EQ(...) std::cout
+#define LOG_ASSERT(...) ;
 #endif
 } // namespace pmwcas
