@@ -37,8 +37,12 @@ namespace pmwcas {
 #define DCHECK(...) ;
 #define RAW_CHECK(...) ;
 #define LOG(...) std::cout
-#define LOG_IF(FATAL, ...) std::cout
 #define CHECK_EQ(...) std::cout
 #define LOG_ASSERT(...) ;
+
+#ifndef ALWAYS_ASSERT
+#define ALWAYS_ASSERT(expr) (expr) ? (void)0 : abort()
+#endif
+
 #endif
 } // namespace pmwcas

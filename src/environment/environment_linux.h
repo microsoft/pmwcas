@@ -180,7 +180,7 @@ class TlsAllocator : public IAllocator {
         auto node = numa_node_of_cpu(sched_getcpu());
         uint64_t off = __atomic_fetch_add(&tls_allocator->numa_allocated_[node], kSlabSize, __ATOMIC_SEQ_CST);
         memory = tls_allocator->numa_memory_[node] + off;
-        LOG_IF(FATAL, off >= tls_allocator->kNumaMemorySize) << "Not enough memory";
+        ALWAYS_ASSERT(off < tls_allocator->kNumaMemorySize);
         allocated = 0;
         goto retry;
       }

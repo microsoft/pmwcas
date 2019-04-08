@@ -12,8 +12,7 @@ RandomReadWriteAsyncFile::make_unique_ptr_t(RandomReadWriteAsyncFile* p) {
   return unique_ptr_t<RandomReadWriteAsyncFile>(p,
   [](RandomReadWriteAsyncFile* p) {
     Status s = p->Close();
-    LOG_IF(FATAL, !s.ok()) << "File failed closing with error: " <<
-      s.ToString();
+    ALWAYS_ASSERT(s.ok());
     Allocator::Get()->Free(p);
   });
 }

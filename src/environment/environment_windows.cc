@@ -354,7 +354,7 @@ WindowsRandomReadRandomWriteFile::WindowsRandomReadRandomWriteFile()
 
 WindowsRandomReadRandomWriteFile::~WindowsRandomReadRandomWriteFile() {
   Status s = Close();
-  LOG_IF(FATAL, !s.ok()) << "File failed closing with error: " << s.ToString();
+  ALWAYS_ASSERT(s.ok());
 }
 
 RandomReadWriteAsyncFile::~RandomReadWriteAsyncFile() {
@@ -892,8 +892,7 @@ Status WindowsAsyncIOHandler::ScheduleOperation(OperationType operationType,
         sizeof(IOCallbackContext))),
   [](IOCallbackContext* c) {
     Status s = c->caller_context->DeepDelete();
-    LOG_IF(ERROR, !s.ok()) << "deep delete failed with status: " <<
-        s.ToString();
+    ALWAYS_ASSERT(s.ok());
     Allocator::Get()->Free(c);
   });
 

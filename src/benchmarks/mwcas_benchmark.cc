@@ -333,7 +333,7 @@ void RunBenchmark() {
       fprintf(stderr, "unknown benchmark name: %s\n", benchmark_name.c_str());
     }
 
-    LOG_IF(FATAL, !s.ok()) << "Benchmark failed. " << s.ToString();
+    ALWAYS_ASSERT(s.ok());
   }
 }
 
