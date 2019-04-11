@@ -439,8 +439,10 @@ class PMDKAllocator : IAllocator {
   void Allocate(void **mem, size_t nSize) override {
     TX_BEGIN(pop) {
       PMEMoid ptr;
-      if(pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char))){
+      int ret = pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char));
+      if (ret) {
         LOG(FATAL) << "POBJ_ALLOC error";
+        ALWAYS_ASSERT(ret == 0);
       }
       *mem = pmemobj_direct(ptr);
       pmemobj_persist(pop, *mem, sizeof(uint64_t));
@@ -462,8 +464,10 @@ class PMDKAllocator : IAllocator {
   void AllocateDirect(void** mem, size_t nSize) {
     TX_BEGIN(pop) {
       PMEMoid ptr;
-      if(pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char))){
+      int ret = pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char));
+      if (ret) {
         LOG(FATAL) << "POBJ_ALLOC error";
+        ALWAYS_ASSERT(ret == 0);
       }
       *mem = pmemobj_direct(ptr);
       pmemobj_persist(pop, *mem, sizeof(uint64_t));
@@ -472,8 +476,10 @@ class PMDKAllocator : IAllocator {
 
   void* AllocateOff(size_t nSize){
     PMEMoid ptr;
-    if(pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char))){
+    int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
+    if (ret) {
       LOG(FATAL) << "POBJ_ALLOC error";
+      ALWAYS_ASSERT(ret == 0);
     }
     return reinterpret_cast<void*>(ptr.off);
   }
