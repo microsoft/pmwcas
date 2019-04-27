@@ -479,6 +479,8 @@ private:
 
   ~DescriptorPool();
 
+  inline uint32_t GetDescPerPartition() { return desc_per_partition_; }
+
   /// Returns a pointer to the epoch manager associated with this pool.
   /// MwcTargetField::GetValue() needs it.
   EpochManager* GetEpoch() {
