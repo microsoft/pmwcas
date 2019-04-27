@@ -445,7 +445,6 @@ class PMDKAllocator : IAllocator {
         ALWAYS_ASSERT(ret == 0);
       }
       *mem = pmemobj_direct(ptr);
-      pmemobj_persist(pop, *mem, sizeof(uint64_t));
     }TX_END
   }
 
@@ -470,7 +469,6 @@ class PMDKAllocator : IAllocator {
         ALWAYS_ASSERT(ret == 0);
       }
       *mem = pmemobj_direct(ptr);
-      pmemobj_persist(pop, *mem, sizeof(uint64_t));
     }TX_END
   }
 
