@@ -393,8 +393,29 @@ class DefaultAllocator : IAllocator {
 
 #define CREATE_MODE_RW (S_IWUSR | S_IRUSR)
 POBJ_LAYOUT_BEGIN(allocator);
-POBJ_LAYOUT_TOID(allocator, char);
-POBJ_LAYOUT_END(allocator);
+POBJ_LAYOUT_TOID(allocator, char)
+POBJ_LAYOUT_END(allocator)
+
+template<typename T>
+struct nv_ptr {
+  nv_ptr(uint64_t off) : offset(off) {}
+
+  T *operator->();
+
+  T &operator*();
+
+  inline uint64_t get() {
+    return offset;
+  }
+
+  inline void set(uint64_t off) {
+    offset = off;
+  }
+
+ private:
+  uint64_t offset;
+};
+
 
 /// A wrapper for using PMDK allocator
 class PMDKAllocator : IAllocator {
@@ -438,14 +459,29 @@ class PMDKAllocator : IAllocator {
 
   void Allocate(void **mem, size_t nSize) override {
     TX_BEGIN(pop) {
-      PMEMoid ptr;
-      int ret = pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char));
-      if (ret) {
-        LOG(FATAL) << "POBJ_ALLOC error";
-        ALWAYS_ASSERT(ret == 0);
-      }
-      *mem = pmemobj_direct(ptr);
-    }TX_END
+            PMEMoid ptr;
+            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
+            if (ret) {
+              LOG(FATAL) << "POBJ_ALLOC error";
+              ALWAYS_ASSERT(ret == 0);
+            }
+            *mem = pmemobj_direct(ptr);
+          }
+    TX_END
+  }
+
+  template<typename T>
+  void Allocate(nv_ptr<T> **mem, size_t nSize) {
+    TX_BEGIN(pop) {
+            PMEMoid ptr;
+            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
+            if (ret) {
+              LOG(FATAL) << "POBJ_ALLOC error";
+              ALWAYS_ASSERT(ret == 0);
+            }
+            (*mem)->set(ptr.off);
+          }
+    TX_END
   }
 
   template<typename T>
@@ -460,16 +496,17 @@ class PMDKAllocator : IAllocator {
         reinterpret_cast<char *>(pmem_direct) - reinterpret_cast<char *>(GetPool()));
   }
 
-  void AllocateDirect(void** mem, size_t nSize) {
+  void AllocateDirect(void **mem, size_t nSize) {
     TX_BEGIN(pop) {
-      PMEMoid ptr;
-      int ret = pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char));
-      if (ret) {
-        LOG(FATAL) << "POBJ_ALLOC error";
-        ALWAYS_ASSERT(ret == 0);
-      }
-      *mem = pmemobj_direct(ptr);
-    }TX_END
+            PMEMoid ptr;
+            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
+            if (ret) {
+              LOG(FATAL) << "POBJ_ALLOC error";
+              ALWAYS_ASSERT(ret == 0);
+            }
+            *mem = pmemobj_direct(ptr);
+          }
+    TX_END
   }
 
   void* AllocateOff(size_t nSize){
@@ -539,6 +576,23 @@ class PMDKAllocator : IAllocator {
   PMEMobjpool *pop;
   const char *file_name;
 };
+
+template<typename T>
+T *nv_ptr<T>::operator->() {
+  auto allocator = reinterpret_cast<PMDKAllocator *>(Allocator::Get());
+  return reinterpret_cast<T *>(
+      reinterpret_cast<uint64_t>(allocator->GetPool()) + offset
+  );
+}
+
+template<typename T>
+T &nv_ptr<T>::operator*() {
+  auto allocator = reinterpret_cast<PMDKAllocator *>(Allocator::Get());
+  return *reinterpret_cast<T *>(
+      reinterpret_cast<uint64_t>(allocator->GetPool()) + offset
+  );
+}
+
 #endif  // PMDK
 
 }
