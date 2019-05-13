@@ -74,7 +74,7 @@ if(WITH_RTM)
 endif()
 
 # Descriptor capacity - default four words max
-set(DESC_CAP "4" CACHE STRING "Descriptor capacity")
+set(DESC_CAP 4)
 add_definitions(-DDESC_CAP=${DESC_CAP})
 message(STATUS "Descirptor capacity: ${DESC_CAP}")
 
