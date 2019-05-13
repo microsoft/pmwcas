@@ -162,7 +162,6 @@ if(${GOOGLE_FRAMEWORK})
     URL ${CMAKE_CURRENT_SOURCE_DIR}/third-party/gflags-2.1.2/gflags
     PREFIX "${GFLAGS_PREFIX}"
 
-    
     # Disable install step
     INSTALL_COMMAND ""
 
@@ -268,27 +267,9 @@ include_directories(${PROJECT_SOURCE_DIR}/src)
 
 ##################### PMDK ####################
 if(${PMEM_BACKEND} STREQUAL "PMDK")
-  set(PMDK_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/pmdk")
-  ExternalProject_Add(PMDK
-    GIT_REPOSITORY https://github.com/pmem/pmdk.git
-    GIT_TAG stable-1.5
-    BUILD_IN_SOURCE 1
-    BUILD_COMMAND $(MAKE)
-    PREFIX ${PMDK_PREFIX}
-    CONFIGURE_COMMAND ""
-    INSTALL_COMMAND ""
-    LOG_DOWNLOAD ON
-    LOG_CONFIGURE ON
-    LOG_BUILD ON
-  )
-
-  include_directories(${PMDK_PREFIX}/src/PMDK/src/include)
-  if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    link_directories(${PMDK_PREFIX}/src/PMDK/src/debug)
-  else()
-    link_directories(${PMDK_PREFIX}/src/PMDK/src/nondebug)
-  endif()
-  link_libraries("-lpmemobj")
+  set(PMDK_LIB_PATH "/usr/local/lib" CACHE STRING "PMDK lib install path")
+  add_library(pmemobj SHARED IMPORTED)
+  set_property(TARGET pmemobj PROPERTY IMPORTED_LOCATION ${PMDK_LIB_PATH}/libpmemobj.so)
 endif()
 ##############################################
 
@@ -325,7 +306,7 @@ endif()
 option(BUILD_APPS "Build tests and benchmarks based on gtest" ON)
 if(${BUILD_APPS})
   if(NOT GOOGLE_FRAMEWORK)
-    message(FATAL_ERROR "Must enable GOOGLE_FRAMEWORK to be able to build tests and benchmarks") 
+    message(FATAL_ERROR "Must enable GOOGLE_FRAMEWORK to be able to build tests and benchmarks")
   endif()
 
   add_definitions(-DAPPS)
@@ -361,11 +342,8 @@ if(${BUILD_APPS})
   endif()
 
   target_link_libraries(${TEST_NAME} ${PMWCAS_TEST_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
-  target_include_directories(${TEST_NAME} PUBLIC ${gtest_SOURCE_DIR} ${gtest_SOURCE_DIR}/include) 
+  target_include_directories(${TEST_NAME} PUBLIC ${gtest_SOURCE_DIR} ${gtest_SOURCE_DIR}/include)
   add_test(${TEST_NAME} ${CMAKE_BINARY_DIR}/${TEST_NAME})
-  if(${PMEM_BACKEND} STREQUAL "PMDK")
-    add_dependencies(${TEST_NAME} PMDK)
-  endif()
 endif()
 ENDFUNCTION()
 
@@ -378,9 +356,6 @@ if(${BUILD_APPS})
     add_executable(${BENCHMARK_NAME} ${BENCHMARK_HEADERS} ${BENCHMARK_NAME}.cc ${PROJECT_SOURCE_DIR}/${LINUX_ENVIRONMENT_SOURCES})
   endif()
 
-  if(${PMEM_BACKEND} STREQUAL "PMDK")
-    add_dependencies(${BENCHMARK_NAME} PMDK)
-  endif()
   target_link_libraries(${BENCHMARK_NAME} ${PMWCAS_BENCHMARK_LINK_LIBS} ${PMWCAS_APPS_LINK_LIBS})
 endif()
 ENDFUNCTION()
@@ -404,16 +379,12 @@ endif()
 
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
+if(${PMEM_BACKEND} STREQUAL "PMDK")
+  target_link_libraries(pmwcas PUBLIC pmemobj)
+endif()
 
 if(${GOOGLE_FRAMEWORK})
   add_dependencies(pmwcas GFlags)
   add_dependencies(pmwcas GLog)
   add_dependencies(pmwcas GTest)
-endif()
-
-if(${PMEM_BACKEND} STREQUAL "PMDK")
-  add_dependencies(pmwcas PMDK)
-  if (${BUILD_APPS})
-    add_dependencies(double-linked-list PMDK)
-  endif()
 endif()
