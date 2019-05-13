@@ -389,13 +389,9 @@ class DefaultAllocator : IAllocator {
 
 };
 
-#ifdef PMDK
-
-#define CREATE_MODE_RW (S_IWUSR | S_IRUSR)
-POBJ_LAYOUT_BEGIN(allocator);
-POBJ_LAYOUT_TOID(allocator, char)
-POBJ_LAYOUT_END(allocator)
-
+// A wrapper for raw pointers
+// init with nv offset and use as absolute addr
+// will properly set the offset
 template<typename T>
 struct nv_ptr {
   nv_ptr(uint64_t off) : offset(off) {}
@@ -416,6 +412,12 @@ struct nv_ptr {
   uint64_t offset;
 };
 
+#ifdef PMDK
+
+#define CREATE_MODE_RW (S_IWUSR | S_IRUSR)
+POBJ_LAYOUT_BEGIN(allocator);
+POBJ_LAYOUT_TOID(allocator, char)
+POBJ_LAYOUT_END(allocator)
 
 /// A wrapper for using PMDK allocator
 class PMDKAllocator : IAllocator {
@@ -577,22 +579,29 @@ class PMDKAllocator : IAllocator {
   const char *file_name;
 };
 
+#endif  // PMDK
+
 template<typename T>
 T *nv_ptr<T>::operator->() {
+#ifdef PMDK
   auto allocator = reinterpret_cast<PMDKAllocator *>(Allocator::Get());
   return reinterpret_cast<T *>(
       reinterpret_cast<uint64_t>(allocator->GetPool()) + offset
   );
+#else
+  return reinterpret_cast<T *>(offset);
+#endif
 }
 
 template<typename T>
 T &nv_ptr<T>::operator*() {
+#ifdef PMDK
   auto allocator = reinterpret_cast<PMDKAllocator *>(Allocator::Get());
   return *reinterpret_cast<T *>(
       reinterpret_cast<uint64_t>(allocator->GetPool()) + offset
   );
+#else
+  return *reinterpret_cast<T *>(offset);
+#endif
 }
-
-#endif  // PMDK
-
 }
