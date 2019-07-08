@@ -8,13 +8,11 @@
 #include <sys/stat.h>
 
 #include <cstdint>
+#include <iostream>
 #include <atomic>
 #include <memory>
 #include <string>
 #include <unordered_map>
-
-#include <glog/logging.h>
-#include <glog/raw_logging.h>
 
 #ifdef PMDK
 #include <libpmemobj.h>
@@ -182,7 +180,7 @@ class TlsAllocator : public IAllocator {
         auto node = numa_node_of_cpu(sched_getcpu());
         uint64_t off = __atomic_fetch_add(&tls_allocator->numa_allocated_[node], kSlabSize, __ATOMIC_SEQ_CST);
         memory = tls_allocator->numa_memory_[node] + off;
-        LOG_IF(FATAL, off >= tls_allocator->kNumaMemorySize) << "Not enough memory";
+        ALWAYS_ASSERT(off < tls_allocator->kNumaMemorySize);
         allocated = 0;
         goto retry;
       }
@@ -391,12 +389,39 @@ class DefaultAllocator : IAllocator {
 
 };
 
+// A wrapper for raw pointers
+// init with nv offset and use as absolute addr
+// will properly set the offset
+template<typename T>
+struct nv_ptr {
+  explicit nv_ptr(uint64_t off) : offset(off) {}
+  explicit nv_ptr(T *ptr);
+  nv_ptr() : offset(0) {}
+
+  T *operator->();
+
+  T &operator*();
+
+  inline uint64_t get_offset() {
+    return offset;
+  }
+
+  inline T *get_direct();
+
+  inline void set(uint64_t off) {
+    offset = off;
+  }
+
+ private:
+  uint64_t offset;
+};
+
 #ifdef PMDK
 
 #define CREATE_MODE_RW (S_IWUSR | S_IRUSR)
 POBJ_LAYOUT_BEGIN(allocator);
-POBJ_LAYOUT_TOID(allocator, char);
-POBJ_LAYOUT_END(allocator);
+POBJ_LAYOUT_TOID(allocator, char)
+POBJ_LAYOUT_END(allocator)
 
 /// A wrapper for using PMDK allocator
 class PMDKAllocator : IAllocator {
@@ -440,13 +465,29 @@ class PMDKAllocator : IAllocator {
 
   void Allocate(void **mem, size_t nSize) override {
     TX_BEGIN(pop) {
-      PMEMoid ptr;
-      if(pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char))){
-        LOG(FATAL) << "POBJ_ALLOC error";
-      }
-      *mem = pmemobj_direct(ptr);
-      pmemobj_persist(pop, *mem, sizeof(uint64_t));
-    }TX_END
+            PMEMoid ptr;
+            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
+            if (ret) {
+              LOG(FATAL) << "POBJ_ALLOC error";
+              ALWAYS_ASSERT(ret == 0);
+            }
+            *mem = pmemobj_direct(ptr);
+          }
+    TX_END
+  }
+
+  template<typename T>
+  void Allocate(nv_ptr<T> *mem, size_t nSize) {
+    TX_BEGIN(pop) {
+            PMEMoid ptr;
+            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
+            if (ret) {
+              LOG(FATAL) << "POBJ_ALLOC error";
+              ALWAYS_ASSERT(ret == 0);
+            }
+            mem->set(ptr.off);
+          }
+    TX_END
   }
 
   template<typename T>
@@ -461,21 +502,25 @@ class PMDKAllocator : IAllocator {
         reinterpret_cast<char *>(pmem_direct) - reinterpret_cast<char *>(GetPool()));
   }
 
-  void AllocateDirect(void** mem, size_t nSize) {
+  void AllocateDirect(void **mem, size_t nSize) {
     TX_BEGIN(pop) {
-      PMEMoid ptr;
-      if(pmemobj_zalloc(pop, &ptr, sizeof(char)*nSize, TOID_TYPE_NUM(char))){
-        LOG(FATAL) << "POBJ_ALLOC error";
-      }
-      *mem = pmemobj_direct(ptr);
-      pmemobj_persist(pop, *mem, sizeof(uint64_t));
-    }TX_END
+            PMEMoid ptr;
+            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
+            if (ret) {
+              LOG(FATAL) << "POBJ_ALLOC error";
+              ALWAYS_ASSERT(ret == 0);
+            }
+            *mem = pmemobj_direct(ptr);
+          }
+    TX_END
   }
 
   void* AllocateOff(size_t nSize){
     PMEMoid ptr;
-    if(pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char))){
+    int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
+    if (ret) {
       LOG(FATAL) << "POBJ_ALLOC error";
+      ALWAYS_ASSERT(ret == 0);
     }
     return reinterpret_cast<void*>(ptr.off);
   }
@@ -537,6 +582,38 @@ class PMDKAllocator : IAllocator {
   PMEMobjpool *pop;
   const char *file_name;
 };
+
 #endif  // PMDK
 
+template <typename T>
+T* nv_ptr<T>::get_direct() {
+#ifdef PMDK
+  auto allocator = reinterpret_cast<PMDKAllocator *>(Allocator::Get());
+  return reinterpret_cast<T *>(
+      reinterpret_cast<uint64_t>(allocator->GetPool()) + offset
+  );
+#else
+  return reinterpret_cast<T *>(offset);
+#endif
+}
+
+template<typename T>
+T *nv_ptr<T>::operator->() {
+  return get_direct();
+}
+
+template<typename T>
+T &nv_ptr<T>::operator*() {
+  return *get_direct();
+}
+
+template<typename T>
+nv_ptr<T>::nv_ptr(T *ptr) {
+#ifdef PMDK
+  auto allocator = reinterpret_cast<PMDKAllocator *>(Allocator::Get());
+  offset = reinterpret_cast<uint64_t>(ptr) - reinterpret_cast<uint64_t>(allocator->GetPool());
+#else
+  offset=reinterpret_cast<uint64_t>(ptr);
+#endif
+}
 }

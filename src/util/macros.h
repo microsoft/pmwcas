@@ -5,6 +5,18 @@
 
 #include <cstdint>
 #include <cassert>
+#include <string>
+
+#ifdef GOOGLE_FRAMEWORK
+#include <glog/logging.h>
+#include <glog/raw_logging.h>
+#else
+#define DCHECK(...) ;
+#define RAW_CHECK(...) ;
+#define LOG(...) std::cout
+#define CHECK_EQ(...) std::cout
+#define LOG_ASSERT(...) ;
+#endif
 
 namespace pmwcas {
 
@@ -29,4 +41,7 @@ namespace pmwcas {
     className(className&&) = delete; \
     className& operator=(className&&) = delete
 
+#ifndef ALWAYS_ASSERT
+#define ALWAYS_ASSERT(expr) (expr) ? (void)0 : abort()
+#endif
 } // namespace pmwcas

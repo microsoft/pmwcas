@@ -10,7 +10,9 @@
 #include <cstdint>
 #include <list>
 #include <mutex>
+#ifdef GOOGLE_FRAMEWORK
 #include <gtest/gtest_prod.h>
+#endif
 #include "include/status.h"
 #include "util/macros.h"
 
@@ -240,6 +242,7 @@ class EpochManager {
 
    private:
 
+#ifdef GOOGLE_FRAMEWORK
     FRIEND_TEST(EpochManagerTest, Protect);
     FRIEND_TEST(EpochManagerTest, Unprotect);
     FRIEND_TEST(EpochManagerTest, ComputeNewSafeToReclaimEpoch);
@@ -252,6 +255,7 @@ class EpochManager {
     FRIEND_TEST(MinEpochTableTest, getEntryForThread_OneSlotFree);
     FRIEND_TEST(MinEpochTableTest, reserveEntryForThread);
     FRIEND_TEST(MinEpochTableTest, reserveEntry);
+#endif
 
     /// Thread protection status entries. Threads lock entries the first time
     /// the call Protect() (see reserveEntryForThread()). See documentation for

@@ -5,8 +5,6 @@
 #include <Windows.h>
 #undef ERROR // Avoid collision of ERROR definition in Windows.h with glog
 #endif
-#include "glog/logging.h"
-#include "glog/raw_logging.h"
 #include "include/pmwcas.h"
 #include "mwcas/mwcas.h"
 #include "util/atomics.h"
@@ -21,7 +19,7 @@ DescriptorPartition::DescriptorPartition(EpochManager* epoch,
     : desc_pool(pool), allocated_desc(0) {
   free_list = nullptr;
   garbage_list = new GarbageListUnsafe;
-  auto s = garbage_list->Initialize(epoch);
+  auto s = garbage_list->Initialize(epoch, pool->GetDescPerPartition());
   RAW_CHECK(s.ok(), "garbage list initialization failure");
 }
 
@@ -293,14 +291,6 @@ Descriptor* DescriptorPool::AllocateDescriptor(Descriptor::AllocateCallback ac,
   }
   tls_part->free_list = desc->next_ptr_;
 
-  if (++tls_part->allocated_desc >= (desc_per_partition_ / 2)) {
-    tls_part->garbage_list->GetEpoch()->BumpCurrentEpoch();
-    auto scavenged = tls_part->garbage_list->Scavenge();
-    tls_part->allocated_desc -= scavenged;
-    RAW_CHECK(tls_part->allocated_desc <= desc_per_partition_, "more allocated than partition has");
-    MwCASMetrics::AddDescriptorScavenge();
-  }
-
   MwCASMetrics::AddDescriptorAlloc();
   RAW_CHECK(desc, "null descriptor pointer");
   desc->allocate_callback_ = ac ? ac : Descriptor::DefaultAllocateCallback;
@@ -318,7 +308,9 @@ inline void Descriptor::Initialize() {
   status_ = kStatusFinished;
   count_ = 0;
   next_ptr_ = nullptr;
+#ifndef NDEBUG
   memset(words_, 0, sizeof(WordDescriptor) * DESC_CAP);
+#endif
 }
 
 void* Descriptor::DefaultAllocateCallback(size_t size) {

@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-#include <glog/logging.h>
 #include "common/allocator_internal.h"
 #include "common/environment_internal.h"
 #include "include/pmwcas.h"
