@@ -450,20 +450,6 @@ class PMDKAllocator : IAllocator {
   }
 
   template<typename T>
-  void Allocate(nv_ptr<T> *mem, size_t nSize) {
-    TX_BEGIN(pop) {
-            PMEMoid ptr;
-            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-            if (ret) {
-              LOG(FATAL) << "POBJ_ALLOC error";
-              ALWAYS_ASSERT(ret == 0);
-            }
-            mem->set(ptr.off);
-          }
-    TX_END
-  }
-
-  template<typename T>
   inline T *GetDirect(T *pmem_offset) {
     return reinterpret_cast<T *>(
         reinterpret_cast<uint64_t>(pmem_offset) + reinterpret_cast<char *>(GetPool()));
