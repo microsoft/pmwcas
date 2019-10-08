@@ -268,8 +268,10 @@ include_directories(${PROJECT_SOURCE_DIR}/src)
 ##################### PMDK ####################
 if(${PMEM_BACKEND} STREQUAL "PMDK")
   set(PMDK_LIB_PATH "/usr/local/lib" CACHE STRING "PMDK lib install path")
-  add_library(pmemobj SHARED IMPORTED)
-  set_property(TARGET pmemobj PROPERTY IMPORTED_LOCATION ${PMDK_LIB_PATH}/libpmemobj.so)
+  add_library(pmemobj STATIC IMPORTED)
+  add_library(pmem STATIC IMPORTED)
+  set_property(TARGET pmemobj PROPERTY IMPORTED_LOCATION ${PMDK_LIB_PATH}/libpmemobj.a)
+  set_property(TARGET pmem PROPERTY IMPORTED_LOCATION ${PMDK_LIB_PATH}/libpmem.a)
 endif()
 ##############################################
 
@@ -380,7 +382,7 @@ endif()
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
 if(${PMEM_BACKEND} STREQUAL "PMDK")
-  target_link_libraries(pmwcas PUBLIC pmemobj)
+  target_link_libraries(pmwcas PUBLIC pmemobj pmem ndctl)
 endif()
 
 if(${GOOGLE_FRAMEWORK})
