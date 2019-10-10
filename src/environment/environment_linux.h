@@ -271,7 +271,7 @@ class TlsAllocator : public IAllocator {
     /// TODO(tzwang): not implemented yet
   }
 
-  void Free(void* pBytes) {
+  void Free(void* pBytes) override {
     auto& tls_map = GetTlsMap();
     // Extract the hidden size info
     Header* pHeader = ExtractHeader(pBytes);
@@ -291,7 +291,7 @@ class TlsAllocator : public IAllocator {
     Allocate(mem, nSize);
   }
 
-  void FreeAligned(void* pBytes) {
+  void FreeAligned(void* pBytes) override {
     /// TODO(tzwang): take care of aligned allocations
     return Free(pBytes);
   }
@@ -300,16 +300,16 @@ class TlsAllocator : public IAllocator {
     /// TODO(tzwang): not implemented yet
   }
 
-  void AllocateHuge(void **mem, size_t size) {
+  void AllocateHuge(void **mem, size_t size) override {
     /// TODO(tzwang): not implemented yet
   }
 
-  Status Validate(void* pBytes) {
+  Status Validate(void* pBytes) override {
     /// TODO(tzwang): not implemented yet
     return Status::OK();
   }
 
-  uint64_t GetAllocatedSize(void* pBytes) {
+  uint64_t GetAllocatedSize(void* pBytes) override {
     /// TODO(tzwang): not implemented yet
     return 0;
   }
@@ -349,7 +349,7 @@ class DefaultAllocator : IAllocator {
     return;
   }
 
-  void Free(void* pBytes) {
+  void Free(void* pBytes) override {
     free(pBytes);
   }
 
@@ -358,7 +358,7 @@ class DefaultAllocator : IAllocator {
     return Allocate(mem, nSize);
   }
 
-  void FreeAligned(void* pBytes) {
+  void FreeAligned(void* pBytes) override {
     return Free(pBytes);
   }
 
@@ -372,12 +372,12 @@ class DefaultAllocator : IAllocator {
     return;
   }
 
-  Status Validate(void* pBytes) {
+  Status Validate(void* pBytes) override {
     /// TODO(tzwang): not implemented yet
     return Status::OK();
   }
 
-  uint64_t GetAllocatedSize(void* pBytes) {
+  uint64_t GetAllocatedSize(void* pBytes) override {
     /// TODO(tzwang): not implemented yet
     return 0;
   }

@@ -26,7 +26,7 @@ namespace pmwcas {
 #define verify(exp) ((void)0)
 #endif
 
-#define MARK_UNREFERENCED(P) (P)
+#define MARK_UNREFERENCED(P) ((void)P)
 
 #define PREFETCH_KEY_DATA(key) _mm_prefetch(key.data(), _MM_HINT_T0)
 #define PREFETCH_NEXT_PAGE(delta) _mm_prefetch((char*)(delta->next_page), _MM_HINT_T0)
