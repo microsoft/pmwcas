@@ -679,6 +679,10 @@ retry_entry:
       continue;
     }
 
+    if (rval & kDirtyFlag){
+      goto retry_entry;
+    }
+
     // Do we need to help another MWCAS operation?
     if(IsMwCASDescriptorPtr(rval)) {
       if(rval & kDirtyFlag) {
@@ -796,6 +800,10 @@ retry_entry:
     // will know reliably whether to roll forward or back for this descriptor.
     if(rval == wd->old_value_ || CleanPtr(rval) == (uint64_t)this) {
       continue;
+    }
+
+    if (rval & kDirtyFlag){
+      goto retry_entry;
     }
 
     // Do we need to help another MWCAS operation?
