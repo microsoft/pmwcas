@@ -20,3 +20,5 @@ tags
 tags.vim
 .idea
 cmake-build*
+.vscode
+release
