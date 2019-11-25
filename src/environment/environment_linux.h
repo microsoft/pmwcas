@@ -438,14 +438,12 @@ class PMDKAllocator : IAllocator {
 
   void Allocate(void **mem, size_t nSize) override {
     TX_BEGIN(pop) {
-            PMEMoid ptr;
-            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-            if (ret) {
-              LOG(FATAL) << "POBJ_ALLOC error";
-              ALWAYS_ASSERT(ret == 0);
-            }
-            *mem = pmemobj_direct(ptr);
-          }
+      if(*mem != nullptr) {
+        pmemobj_tx_add_range_direct(mem, sizeof(uint64_t));
+      }
+      *mem = pmemobj_direct(pmemobj_tx_alloc(nSize, TOID_TYPE_NUM(char)));
+    }
+    TX_ONABORT { std::cout<<"Allocate: TXN Allocation Error: "<< nSize << std::endl; }
     TX_END
   }
 
@@ -462,16 +460,7 @@ class PMDKAllocator : IAllocator {
   }
 
   void AllocateDirect(void **mem, size_t nSize) {
-    TX_BEGIN(pop) {
-            PMEMoid ptr;
-            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-            if (ret) {
-              LOG(FATAL) << "POBJ_ALLOC error";
-              ALWAYS_ASSERT(ret == 0);
-            }
-            *mem = pmemobj_direct(ptr);
-          }
-    TX_END
+    Allocate(mem, nSize); 
   }
 
   void* AllocateOff(size_t nSize){
