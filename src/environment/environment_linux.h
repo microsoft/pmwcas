@@ -438,15 +438,10 @@ class PMDKAllocator : IAllocator {
 
   void Allocate(void **mem, size_t nSize) override {
     TX_BEGIN(pop) {
-            PMEMoid ptr;
-            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-            if (ret) {
-              LOG(FATAL) << "POBJ_ALLOC error";
-              ALWAYS_ASSERT(ret == 0);
-            }
-            *mem = pmemobj_direct(ptr);
-          }
-    TX_END
+      pmemobj_tx_add_range_direct(mem, sizeof(uint64_t));
+      PMEMoid ptr = pmemobj_tx_zalloc(sizeof(char) * nSize, TOID_TYPE_NUM(char));
+      *mem = pmemobj_direct(ptr);
+    }TX_END
   }
 
   template<typename T>
