@@ -463,17 +463,6 @@ class PMDKAllocator : IAllocator {
     Allocate(mem, nSize); 
   }
 
-  void* AllocateOff(size_t nSize){
-    PMEMoid ptr;
-    int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-    if (ret) {
-      LOG(FATAL) << "POBJ_ALLOC error";
-      ALWAYS_ASSERT(ret == 0);
-    }
-    return reinterpret_cast<void*>(ptr.off);
-  }
-
-
   void* GetRoot(size_t nSize) {
     return pmemobj_direct(pmemobj_root(pop, nSize));
   }
@@ -514,11 +503,11 @@ class PMDKAllocator : IAllocator {
     // not implemented
   }
 
-  Status Validate(void* pBytes) {
+  Status Validate(void* pBytes) override {
     return Status::OK();
   }
 
-  uint64_t GetAllocatedSize(void* pBytes) {
+  uint64_t GetAllocatedSize(void* pBytes) override {
     return 0;
   }
 

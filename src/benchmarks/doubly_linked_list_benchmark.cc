@@ -31,7 +31,7 @@ DEFINE_uint64(seed, 1234,
     "number to form the full seed");
 DEFINE_uint64(metrics_dump_interval, 0, "if greater than 0, the benchmark "
     "driver dumps metrics at this fixed interval (in seconds)");
-DEFINE_int32(insert_pct, 0, "percentage of insert");
+DEFINE_int32(insert_pct, 100, "percentage of insert");
 DEFINE_int32(delete_pct, 0, "percentage of delete");
 DEFINE_int32(search_pct, 0, "percentage of search");
 DEFINE_int32(read_heavy, 0, "whether to run the read-heavy experiment");
