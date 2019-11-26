@@ -35,6 +35,9 @@ DEFINE_uint64(write_delay_ns, 0, "NVRAM write delay (ns)");
 DEFINE_bool(emulate_write_bw, false, "Emulate write bandwidth");
 DEFINE_bool(clflush, false, "Use CLFLUSH, instead of spinning delays."
   "write_dealy_ns and emulate_write_bw will be ignored.");
+#ifdef PMDK
+DEFINE_string(pmdk_pool, "/mnt/pmem0/mwcas_benchmark_pool", "path to pmdk pool");
+#endif
 #endif
 
 namespace pmwcas {
@@ -60,8 +63,17 @@ void DumpArgs() {
     std::cout << "> Args emulate_write_bw " <<
         FLAGS_emulate_write_bw << std::endl;
   }
+
+  #ifdef PMDK
+   std::cout << "> Args pmdk_pool " << FLAGS_pmdk_pool << std::endl;
+  #endif
 #endif
 }
+
+struct PMDKRootObj {
+  DescriptorPool *desc_pool_{nullptr};
+  CasPtr* test_array_{nullptr};
+};
 
 struct MwCas : public Benchmark {
   MwCas()
@@ -74,78 +86,27 @@ struct MwCas : public Benchmark {
   void Setup(size_t thread_count) {
     // Ideally the descriptor pool is sized to the number of threads in the
     // benchmark to reduce need for new allocations, etc.
-    Allocator::Get()->Allocate((void **)&descriptor_pool_, sizeof(DescriptorPool));
-    Descriptor *pool_va = nullptr;
-    std::string segname(FLAGS_shm_segment);
-    persistent_ = (segname.size() != 0);
-    bool old = false;
-#ifdef PMEM
-    if(FLAGS_clflush) {
-      NVRAM::InitializeClflush();
-    } else {
-      NVRAM::InitializeSpin(FLAGS_write_delay_ns, FLAGS_emulate_write_bw);
-    }
+#ifdef PMDK
+    auto allocator = reinterpret_cast<PMDKAllocator*>(Allocator::Get());
+    auto root_obj = reinterpret_cast<PMDKRootObj*>(allocator->GetRoot(sizeof(PMDKRootObj)));
+    Allocator::Get()->Allocate((void **)&root_obj->desc_pool_, sizeof(DescriptorPool));
+    // Allocate the thread array and initialize to consecutive even numbers
+    Allocator::Get()->Allocate((void **)&root_obj->test_array_, FLAGS_array_size * sizeof(CasPtr));
+    // TODO: might have some memory leak here, but for benchmark we don't care (yet).
 
-    uint64_t size = sizeof(DescriptorPool::Metadata) +
-                    sizeof(Descriptor) * FLAGS_descriptor_pool_size +  // descriptors area
-                    sizeof(CasPtr) * FLAGS_array_size;  // data area
-
-    SharedMemorySegment* segment = nullptr;
-    auto s = Environment::Get()->NewSharedMemorySegment(segname, size, true,
-        &segment);
-    RAW_CHECK(s.ok() && segment, "Error creating memory segment");
-
-    // Attach anywhere to extract the base address we used last time
-    s = segment->Attach();
-    RAW_CHECK(s.ok(), "cannot attach");
-
-    uintptr_t base_address = *(uintptr_t*)segment->GetMapAddress();
-    if(base_address) {
-      old = true;
-      // An existing pool, with valid descriptors and data
-      if(base_address != (uintptr_t)segment->GetMapAddress()) {
-        segment->Detach();
-        s = segment->Attach((void*)base_address);
-        if(!s.ok()) {
-          LOG(FATAL) << "Cannot attach to the segment with given base address";
-        }
-      }
-      test_array_ = (CasPtr*)((uintptr_t)segment->GetMapAddress() +
-        sizeof(DescriptorPool::Metadata) +
-        sizeof(Descriptor) * FLAGS_descriptor_pool_size);
-      descriptor_pool_->Recovery(FLAGS_enable_stats);
-    } else {
-      // New pool/data area, store this base address, pass it + meatadata_size
-      // as desc pool va
-      void* map_address = segment->GetMapAddress();
-      DescriptorPool::Metadata *metadata = (DescriptorPool::Metadata*)map_address;
-      metadata->descriptor_count = FLAGS_descriptor_pool_size;
-      metadata->initial_address = (uintptr_t)map_address;
-      test_array_ = (CasPtr*)((uintptr_t)map_address + sizeof(DescriptorPool::Metadata) +
-                              sizeof(Descriptor) * FLAGS_descriptor_pool_size);
-      LOG(INFO) << "Initialized new descriptor pool and data areas";
-    }
-
-    // Recovering from an existing descriptor pool wouldn't cause the data area
-    // to be re-initialized, rather this provides us the opportunity to do a
-    // sanity check: no field should still point to a descriptor after recovery.
-    if(old) {
-      for(uint32_t i = 0; i < FLAGS_array_size; ++i) {
-        RAW_CHECK(((uint64_t)test_array_[i] & 0x1) == 0, "Wrong value");
-      }
-    }
+    descriptor_pool_ = root_obj->desc_pool_;
+    test_array_ = root_obj->test_array_;
 #else
+    Allocator::Get()->Allocate((void **)&descriptor_pool_, sizeof(DescriptorPool));
     // Allocate the thread array and initialize to consecutive even numbers
     Allocator::Get()->Allocate((void **)&test_array_, FLAGS_array_size * sizeof(CasPtr));
+#endif
+    new (descriptor_pool_) DescriptorPool(FLAGS_descriptor_pool_size, FLAGS_threads, true);
 
     // Wrap the test array memory in an auto pointer for easy cleanup, keep the
     // raw pointer to avoid indirection during access
     test_array_guard_ = make_unique_ptr_t<CasPtr>(test_array_);
 
-    for(uint32_t i = 0; i < FLAGS_array_size; ++i) {
-      test_array_[i] = uint64_t(i * 4);
-    }
-#endif
     // Now we can start from a clean slate (perhaps not necessary)
     for(uint32_t i = 0; i < FLAGS_array_size; ++i) {
       test_array_[i] = uint64_t(i * 4);
@@ -294,7 +255,6 @@ struct MwCas : public Benchmark {
   }
 
   CasPtr* test_array_;
-  bool persistent_;
   unique_ptr_t<CasPtr> test_array_guard_;
   DescriptorPool* descriptor_pool_;
   uint64_t previous_dump_run_ticks_;
@@ -346,10 +306,19 @@ int main(int argc, char* argv[]) {
                       pmwcas::WindowsEnvironment::Create,
                       pmwcas::WindowsEnvironment::Destroy);
 #else
+#ifdef PMDK
+  pmwcas::InitLibrary(pmwcas::PMDKAllocator::Create(FLAGS_pmdk_pool.c_str(),
+                                                    "mwcas_layout",
+                                                    static_cast<uint64_t>(1024) * 1024 * 1204 * 1),
+                      pmwcas::PMDKAllocator::Destroy,
+                      pmwcas::LinuxEnvironment::Create,
+                      pmwcas::LinuxEnvironment::Destroy);
+#else
   pmwcas::InitLibrary(pmwcas::TlsAllocator::Create,
                       pmwcas::TlsAllocator::Destroy,
                       pmwcas::LinuxEnvironment::Create,
                       pmwcas::LinuxEnvironment::Destroy);
+#endif
 #endif
   RunBenchmark();
   return 0;

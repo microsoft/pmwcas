@@ -443,7 +443,7 @@ class PMDKAllocator : IAllocator {
       }
       *mem = pmemobj_direct(pmemobj_tx_alloc(nSize, TOID_TYPE_NUM(char)));
     }
-    TX_ONABORT { std::cout<<"Allocate: TXN Allocation Error: "<< nSize << std::endl; }
+    TX_ONABORT { std::cout<<"Allocate: TXN Allocation Error, mem cannot be a DRAM address: "<< mem << std::endl; }
     TX_END
   }
 
