@@ -271,7 +271,7 @@ class TlsAllocator : public IAllocator {
     /// TODO(tzwang): not implemented yet
   }
 
-  void Free(void* pBytes) {
+  void Free(void* pBytes) override {
     auto& tls_map = GetTlsMap();
     // Extract the hidden size info
     Header* pHeader = ExtractHeader(pBytes);
@@ -291,7 +291,7 @@ class TlsAllocator : public IAllocator {
     Allocate(mem, nSize);
   }
 
-  void FreeAligned(void* pBytes) {
+  void FreeAligned(void* pBytes) override {
     /// TODO(tzwang): take care of aligned allocations
     return Free(pBytes);
   }
@@ -300,16 +300,16 @@ class TlsAllocator : public IAllocator {
     /// TODO(tzwang): not implemented yet
   }
 
-  void AllocateHuge(void **mem, size_t size) {
+  void AllocateHuge(void **mem, size_t size) override {
     /// TODO(tzwang): not implemented yet
   }
 
-  Status Validate(void* pBytes) {
+  Status Validate(void* pBytes) override {
     /// TODO(tzwang): not implemented yet
     return Status::OK();
   }
 
-  uint64_t GetAllocatedSize(void* pBytes) {
+  uint64_t GetAllocatedSize(void* pBytes) override {
     /// TODO(tzwang): not implemented yet
     return 0;
   }
@@ -349,7 +349,7 @@ class DefaultAllocator : IAllocator {
     return;
   }
 
-  void Free(void* pBytes) {
+  void Free(void* pBytes) override {
     free(pBytes);
   }
 
@@ -358,7 +358,7 @@ class DefaultAllocator : IAllocator {
     return Allocate(mem, nSize);
   }
 
-  void FreeAligned(void* pBytes) {
+  void FreeAligned(void* pBytes) override {
     return Free(pBytes);
   }
 
@@ -372,12 +372,12 @@ class DefaultAllocator : IAllocator {
     return;
   }
 
-  Status Validate(void* pBytes) {
+  Status Validate(void* pBytes) override {
     /// TODO(tzwang): not implemented yet
     return Status::OK();
   }
 
-  uint64_t GetAllocatedSize(void* pBytes) {
+  uint64_t GetAllocatedSize(void* pBytes) override {
     /// TODO(tzwang): not implemented yet
     return 0;
   }
@@ -387,33 +387,6 @@ class DefaultAllocator : IAllocator {
     return 0;
   }
 
-};
-
-// A wrapper for raw pointers
-// init with nv offset and use as absolute addr
-// will properly set the offset
-template<typename T>
-struct nv_ptr {
-  explicit nv_ptr(uint64_t off) : offset(off) {}
-  explicit nv_ptr(T *ptr);
-  nv_ptr() : offset(0) {}
-
-  T *operator->();
-
-  T &operator*();
-
-  inline uint64_t get_offset() {
-    return offset;
-  }
-
-  inline T *get_direct();
-
-  inline void set(uint64_t off) {
-    offset = off;
-  }
-
- private:
-  uint64_t offset;
 };
 
 #ifdef PMDK
@@ -465,28 +438,12 @@ class PMDKAllocator : IAllocator {
 
   void Allocate(void **mem, size_t nSize) override {
     TX_BEGIN(pop) {
-            PMEMoid ptr;
-            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-            if (ret) {
-              LOG(FATAL) << "POBJ_ALLOC error";
-              ALWAYS_ASSERT(ret == 0);
-            }
-            *mem = pmemobj_direct(ptr);
-          }
-    TX_END
-  }
-
-  template<typename T>
-  void Allocate(nv_ptr<T> *mem, size_t nSize) {
-    TX_BEGIN(pop) {
-            PMEMoid ptr;
-            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-            if (ret) {
-              LOG(FATAL) << "POBJ_ALLOC error";
-              ALWAYS_ASSERT(ret == 0);
-            }
-            mem->set(ptr.off);
-          }
+      if(*mem != nullptr) {
+        pmemobj_tx_add_range_direct(mem, sizeof(uint64_t));
+      }
+      *mem = pmemobj_direct(pmemobj_tx_alloc(nSize, TOID_TYPE_NUM(char)));
+    }
+    TX_ONABORT { std::cout<<"Allocate: TXN Allocation Error, mem cannot be a DRAM address: "<< mem << std::endl; }
     TX_END
   }
 
@@ -503,28 +460,8 @@ class PMDKAllocator : IAllocator {
   }
 
   void AllocateDirect(void **mem, size_t nSize) {
-    TX_BEGIN(pop) {
-            PMEMoid ptr;
-            int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-            if (ret) {
-              LOG(FATAL) << "POBJ_ALLOC error";
-              ALWAYS_ASSERT(ret == 0);
-            }
-            *mem = pmemobj_direct(ptr);
-          }
-    TX_END
+    Allocate(mem, nSize); 
   }
-
-  void* AllocateOff(size_t nSize){
-    PMEMoid ptr;
-    int ret = pmemobj_zalloc(pop, &ptr, sizeof(char) * nSize, TOID_TYPE_NUM(char));
-    if (ret) {
-      LOG(FATAL) << "POBJ_ALLOC error";
-      ALWAYS_ASSERT(ret == 0);
-    }
-    return reinterpret_cast<void*>(ptr.off);
-  }
-
 
   void* GetRoot(size_t nSize) {
     return pmemobj_direct(pmemobj_root(pop, nSize));
@@ -566,11 +503,11 @@ class PMDKAllocator : IAllocator {
     // not implemented
   }
 
-  Status Validate(void* pBytes) {
+  Status Validate(void* pBytes) override {
     return Status::OK();
   }
 
-  uint64_t GetAllocatedSize(void* pBytes) {
+  uint64_t GetAllocatedSize(void* pBytes) override {
     return 0;
   }
 
@@ -584,36 +521,4 @@ class PMDKAllocator : IAllocator {
 };
 
 #endif  // PMDK
-
-template <typename T>
-T* nv_ptr<T>::get_direct() {
-#ifdef PMDK
-  auto allocator = reinterpret_cast<PMDKAllocator *>(Allocator::Get());
-  return reinterpret_cast<T *>(
-      reinterpret_cast<uint64_t>(allocator->GetPool()) + offset
-  );
-#else
-  return reinterpret_cast<T *>(offset);
-#endif
-}
-
-template<typename T>
-T *nv_ptr<T>::operator->() {
-  return get_direct();
-}
-
-template<typename T>
-T &nv_ptr<T>::operator*() {
-  return *get_direct();
-}
-
-template<typename T>
-nv_ptr<T>::nv_ptr(T *ptr) {
-#ifdef PMDK
-  auto allocator = reinterpret_cast<PMDKAllocator *>(Allocator::Get());
-  offset = reinterpret_cast<uint64_t>(ptr) - reinterpret_cast<uint64_t>(allocator->GetPool());
-#else
-  offset=reinterpret_cast<uint64_t>(ptr);
-#endif
-}
 }

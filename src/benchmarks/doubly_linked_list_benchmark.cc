@@ -31,7 +31,7 @@ DEFINE_uint64(seed, 1234,
     "number to form the full seed");
 DEFINE_uint64(metrics_dump_interval, 0, "if greater than 0, the benchmark "
     "driver dumps metrics at this fixed interval (in seconds)");
-DEFINE_int32(insert_pct, 0, "percentage of insert");
+DEFINE_int32(insert_pct, 100, "percentage of insert");
 DEFINE_int32(delete_pct, 0, "percentage of delete");
 DEFINE_int32(search_pct, 0, "percentage of search");
 DEFINE_int32(read_heavy, 0, "whether to run the read-heavy experiment");
@@ -48,6 +48,9 @@ DEFINE_uint64(write_delay_ns, 0, "NVRAM write delay (ns)");
 DEFINE_bool(emulate_write_bw, false, "Emulate write bandwidth");
 DEFINE_bool(clflush, false, "Use CLFLUSH, instead of spinning delays."
   "write_dealy_ns and emulate_write_bw will be ignored.");
+#ifdef PMDK
+DEFINE_string(pmdk_pool, "/mnt/pmem0/doubly_linked_list_benchmark_pool", "path to pmdk pool");
+#endif
 #endif
 
 //DEFINE_uint64(payload_size, 8, "payload size of each node");
@@ -78,6 +81,10 @@ void DumpArgs() {
     std::cout << "> Args emulate_write_bw " << FLAGS_emulate_write_bw
         << std::endl;
   }
+
+#ifdef PMDK
+   std::cout<<"> Args pmdk_pool "<<FLAGS_pmdk_pool<<std::endl;
+  #endif
 #endif
 
   if(FLAGS_insert_pct + FLAGS_delete_pct + FLAGS_search_pct != 100) {
@@ -453,10 +460,19 @@ int main(int argc, char* argv[]) {
                            pmwcas::WindowsEnvironment::Create,
                            pmwcas::WindowsEnvironment::Destroy);
 #else
+#ifdef PMDK
+  pmwcas::InitLibrary(pmwcas::PMDKAllocator::Create(FLAGS_pmdk_pool.c_str(),
+                                                    "doubly_linked_bench_layout",
+                                                    static_cast<uint64_t>(1024) * 1024 * 1204 * 1),
+                      pmwcas::PMDKAllocator::Destroy,
+                      pmwcas::LinuxEnvironment::Create,
+                      pmwcas::LinuxEnvironment::Destroy);
+#else
   pmwcas::InitLibrary(pmwcas::TlsAllocator::Create,
                            pmwcas::TlsAllocator::Destroy,
                            pmwcas::LinuxEnvironment::Create,
                            pmwcas::LinuxEnvironment::Destroy);
+#endif
 #endif
   pmwcas::DumpArgs();
   pmwcas::DListBench test{};

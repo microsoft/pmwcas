@@ -379,8 +379,10 @@ endif()
 
 get_property(PMWCAS_SRC GLOBAL PROPERTY PMWCAS_SRC)
 add_library(pmwcas SHARED ${PMWCAS_SRC})
+add_library(pmwcas_static ${PMWCAS_SRC})
 if(${PMEM_BACKEND} STREQUAL "PMDK")
   target_link_libraries(pmwcas PUBLIC pmemobj)
+  target_link_libraries(pmwcas_static PUBLIC pmemobj)
 endif()
 
 if(${GOOGLE_FRAMEWORK})

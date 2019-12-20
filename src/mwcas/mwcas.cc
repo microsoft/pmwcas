@@ -304,7 +304,7 @@ Descriptor::Descriptor(DescriptorPartition* partition)
   Initialize();
 }
 
-inline void Descriptor::Initialize() {
+void Descriptor::Initialize() {
   status_ = kStatusFinished;
   count_ = 0;
   next_ptr_ = nullptr;
@@ -357,7 +357,7 @@ uint32_t Descriptor::AllocateAndAddEntry(uint64_t* addr, uint64_t oldval,
   return insertpos;
 }
 
-inline int Descriptor::GetInsertPosition(uint64_t* addr) {
+int Descriptor::GetInsertPosition(uint64_t* addr) {
   DCHECK(uint64_t(addr) % sizeof(uint64_t) == 0);
   RAW_CHECK(count_ < DESC_CAP, "too many words");
 
@@ -376,7 +376,7 @@ inline int Descriptor::GetInsertPosition(uint64_t* addr) {
 }
 
 #ifdef PMEM
-inline uint32_t Descriptor::ReadPersistStatus() {
+uint32_t Descriptor::ReadPersistStatus() {
   auto curr_status = *& status_;
   uint32_t stable_status = curr_status & ~kStatusDirtyFlag;
   if(curr_status & kStatusDirtyFlag) {
@@ -478,7 +478,7 @@ retry:
 #endif
 
 #ifndef PMEM
-inline bool Descriptor::VolatileMwCAS(uint32_t calldepth) {
+bool Descriptor::VolatileMwCAS(uint32_t calldepth) {
   DCHECK(owner_partition_->garbage_list->GetEpoch()->IsProtected());
 
   if(status_ != kStatusUndecided) {
@@ -624,7 +624,7 @@ retry_entry:
 #endif
 
 #ifdef PMEM
-inline bool Descriptor::PersistentMwCAS(uint32_t calldepth) {
+bool Descriptor::PersistentMwCAS(uint32_t calldepth) {
   DCHECK(owner_partition_->garbage_list->GetEpoch()->IsProtected());
 
   // Not visible to anyone else, persist before making the descriptor visible
@@ -677,6 +677,10 @@ retry_entry:
     // know reliably whether to roll forward or back for this descriptor.
     if(rval == wd->old_value_ || CleanPtr(rval) == (uint64_t)this) {
       continue;
+    }
+
+    if (rval & kDirtyFlag){
+      goto retry_entry;
     }
 
     // Do we need to help another MWCAS operation?
@@ -796,6 +800,10 @@ retry_entry:
     // will know reliably whether to roll forward or back for this descriptor.
     if(rval == wd->old_value_ || CleanPtr(rval) == (uint64_t)this) {
       continue;
+    }
+
+    if (rval & kDirtyFlag){
+      goto retry_entry;
     }
 
     // Do we need to help another MWCAS operation?

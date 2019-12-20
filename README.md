@@ -29,6 +29,7 @@ A persistence mode must be specified at build time through the `PMEM_BACKEND` op
 
 ## Build (for Linux)
 Suppose we build in a separate directory "build" under the source directory.
+We need to clone the repository with `--recursive` to enable google test build.
 
 To build PMwCAS without TSX:
 ```
