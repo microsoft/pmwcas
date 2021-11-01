@@ -140,7 +140,7 @@ Status LinuxEnvironment::SetThreadAffinity(pthread_t thread, uint64_t core,
       case 21: core = 15; break;
       case 22: core = 19; break;
       case 23: core = 23; break;
-      defautl: RAW_CHECK(false, "wrong core"); break;
+      default: RAW_CHECK(false, "wrong core"); break;
     }
   } else if(affinity_pattern == 5) {
     // spread on c153
